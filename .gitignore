@@ -1,0 +1,26 @@
+# env
+.env
+*.local
+
+# logs
+logs/
+*.log
+
+# docker data
+docker/data/
+
+# IDE
+.idea/
+.vscode/
+
+# Java
+target/
+*.class
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store
+Thumbs.dbproject_structure_snapshot.txt
