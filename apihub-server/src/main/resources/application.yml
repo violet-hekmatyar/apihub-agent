@@ -17,3 +17,7 @@ logging:
   level:
     root: INFO
     com.apihub.agent: INFO
+
+apihub:
+  mock-provider:
+    base-url: ${APIHUB_MOCK_PROVIDER_BASE_URL:http://localhost:8090}

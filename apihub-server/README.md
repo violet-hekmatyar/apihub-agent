@@ -18,6 +18,7 @@ This round implements only:
 - `POST /api/dev/tools/queryApiDocs`
 - `GET /api/dev/eval/tool-chain/scenarios`
 - `POST /api/dev/eval/tool-chain/run`
+- `POST /api/dev/gateway/invoke`
 - `POST /api/agent/run`
 - `POST /api/agent/run/stream`
 
@@ -110,6 +111,7 @@ The smoke script covers:
 - `POST /api/dev/tools/queryApiDocs`
 - `GET /api/dev/eval/tool-chain/scenarios`
 - `POST /api/dev/eval/tool-chain/run`
+- `POST /api/dev/gateway/invoke`
 - `POST /api/agent/run`
 - `POST /api/agent/run/stream`
 
@@ -183,6 +185,16 @@ curl -X POST http://localhost:8080/api/dev/eval/tool-chain/run `
 ```
 
 Supported scenarios are `AUTH_LOGIN_403_DIAG`, `LECTURE_REGISTER_PEAK`, `VENUE_RESERVE_IDEMPOTENCY`, and `LIBRARY_BORROW_DEPENDENCY`.
+
+## Dev-Only Gateway Invoke API
+
+`POST /api/dev/gateway/invoke` calls the standalone mock provider by `apiCode`, validates `appCode` authorization, writes one `gateway_log` row, and returns upstream status/data summary. Start `apihub-mock-provider` on port `8090` before using this endpoint.
+
+```powershell
+curl -X POST http://localhost:8080/api/dev/gateway/invoke `
+  -H "Content-Type: application/json" `
+  -d "{\"apiCode\":\"LECTURE_REGISTER\",\"appCode\":\"LECTURE_PORTAL\",\"mockScenario\":\"RATE_LIMITED\",\"body\":{\"lectureId\":\"lec_20260619_ai_001\",\"studentNo\":\"2023001001\",\"idempotencyKey\":\"idem_lecture_001\"}}"
+```
 
 ## Agent Run And SSE Skeleton
 
