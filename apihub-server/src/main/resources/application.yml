@@ -1,0 +1,19 @@
+server:
+  port: ${APIHUB_SERVER_PORT:8080}
+
+spring:
+  application:
+    name: apihub-agent-server
+  datasource:
+    url: ${APIHUB_DB_URL:jdbc:mysql://127.0.0.1:3306/apihub_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${APIHUB_DB_USERNAME:root}
+    password: ${APIHUB_DB_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+
+logging:
+  level:
+    root: INFO
+    com.apihub.agent: INFO

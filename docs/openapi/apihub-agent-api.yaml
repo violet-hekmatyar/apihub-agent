@@ -1,0 +1,526 @@
+openapi: 3.0.3
+info:
+  title: API-HUB Agent Backend Base API
+  version: 0.1.0
+  description: |
+    OpenAPI document for the current backend smoke-test surface only.
+    Business code in the JSON response is the canonical validation target:
+    code/message/data/traceId. Some business errors may still be returned with
+    HTTP 200 by the current backend implementation.
+servers:
+  - url: http://localhost:8080
+    description: Local API-HUB Agent backend
+tags:
+  - name: Health
+    description: Service and database health checks.
+  - name: Users
+    description: Demo user context and user list APIs.
+paths:
+  /api/health:
+    get:
+      tags:
+        - Health
+      summary: Check service health
+      description: Verifies that the backend service is reachable.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+      responses:
+        '200':
+          description: Service is reachable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHealth'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      app: apihub-agent-server
+                      status: UP
+                      time: '2026-06-19 23:46:43'
+                      javaVersion: '17'
+                    traceId: trace_req_demo_health
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/health/db:
+    get:
+      tags:
+        - Health
+      summary: Check database health
+      description: Verifies database connectivity and returns current seed table counts.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+      responses:
+        '200':
+          description: Database is reachable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseDbHealth'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      databaseName: apihub_agent
+                      tableCount: 17
+                      keyTableRows:
+                        sys_user: 5
+                        api_endpoint: 5
+                        api_call_stat_hourly: 11
+                        gateway_log: 8
+                        agent_session: 4
+                    traceId: trace_req_demo_db
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/users/current:
+    get:
+      tags:
+        - Users
+      summary: Get current demo user
+      description: |
+        Returns the current demo user. If X-Demo-User-Id is omitted, the backend
+        uses the default demo user.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+      responses:
+        '200':
+          description: Current user found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUser'
+              examples:
+                defaultUser:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      id: 1
+                      username: admin_apihub
+                      displayName: API Hub Admin
+                      userType: MANAGER
+                      orgName: Information Center
+                      status: ACTIVE
+                    traceId: trace_req_demo_current
+                userNotFoundBusinessCode:
+                  summary: Business 404 example
+                  value:
+                    code: 404
+                    message: user not found
+                    data: null
+                    traceId: trace_req_demo_not_found
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/users:
+    get:
+      tags:
+        - Users
+      summary: Query demo users
+      description: Returns a paged list of seeded demo users.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - name: pageNo
+          in: query
+          required: false
+          description: Page number, starting from 1.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: pageSize
+          in: query
+          required: false
+          description: Page size. Current backend caps this value at 100.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+          example: 20
+      responses:
+        '200':
+          description: User page returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUserPage'
+              examples:
+                firstPage:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      pageNo: 1
+                      pageSize: 20
+                      total: 5
+                      items:
+                        - id: 1
+                          username: admin_apihub
+                          displayName: API Hub Admin
+                          userType: MANAGER
+                          orgName: Information Center
+                          status: ACTIVE
+                    traceId: trace_req_demo_users
+                cappedPageSize:
+                  summary: pageSize=200 is capped to 100
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      pageNo: 1
+                      pageSize: 100
+                      total: 5
+                      items:
+                        - id: 1
+                          username: admin_apihub
+                          displayName: API Hub Admin
+                          userType: MANAGER
+                          orgName: Information Center
+                          status: ACTIVE
+                    traceId: trace_req_demo_users_capped
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/users/switch:
+    post:
+      tags:
+        - Users
+      summary: Switch current demo user
+      description: Validates and returns the selected demo user.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSwitchRequest'
+            examples:
+              switchToAdmin:
+                value:
+                  userId: 1
+              emptyBody:
+                summary: Invalid request example
+                value: {}
+      responses:
+        '200':
+          description: Demo user switched.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUser'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      id: 1
+                      username: admin_apihub
+                      displayName: API Hub Admin
+                      userType: MANAGER
+                      orgName: Information Center
+                      status: ACTIVE
+                    traceId: trace_req_demo_switch
+                badRequestBusinessCode:
+                  summary: Business 400 example
+                  value:
+                    code: 400
+                    message: userId is required
+                    data: null
+                    traceId: trace_req_demo_bad_request
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    XTraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      description: Optional caller-provided trace id.
+      schema:
+        type: string
+      example: trace_req_demo
+    XDemoUserId:
+      name: X-Demo-User-Id
+      in: header
+      required: false
+      description: Optional demo user id. Defaults to the backend demo user when omitted.
+      schema:
+        type: integer
+        format: int64
+      example: 1
+  responses:
+    BadRequest:
+      description: Bad request business error example.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+          examples:
+            badRequest:
+              value:
+                code: 400
+                message: invalid argument
+                data: null
+                traceId: trace_req_demo_bad_request
+    NotFound:
+      description: Not found business error example.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+          examples:
+            notFound:
+              value:
+                code: 404
+                message: user not found
+                data: null
+                traceId: trace_req_demo_not_found
+    InternalError:
+      description: Internal error business example.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+          examples:
+            internalError:
+              value:
+                code: 500
+                message: internal error
+                data: null
+                traceId: trace_req_demo_internal_error
+  schemas:
+    ApiResponseHealth:
+      type: object
+      required:
+        - code
+        - message
+        - data
+        - traceId
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/HealthResponse'
+        traceId:
+          type: string
+          example: trace_req_demo
+    ApiResponseDbHealth:
+      type: object
+      required:
+        - code
+        - message
+        - data
+        - traceId
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/DbHealthResponse'
+        traceId:
+          type: string
+          example: trace_req_demo
+    ApiResponseUser:
+      type: object
+      required:
+        - code
+        - message
+        - data
+        - traceId
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/DemoUserResponse'
+        traceId:
+          type: string
+          example: trace_req_demo
+    ApiResponseUserPage:
+      type: object
+      required:
+        - code
+        - message
+        - data
+        - traceId
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/UserPageResponse'
+        traceId:
+          type: string
+          example: trace_req_demo
+    ApiResponseError:
+      type: object
+      required:
+        - code
+        - message
+        - traceId
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: invalid argument
+        data:
+          type: object
+          nullable: true
+          example: null
+        traceId:
+          type: string
+          example: trace_req_demo
+    HealthResponse:
+      type: object
+      required:
+        - app
+        - status
+        - time
+        - javaVersion
+      properties:
+        app:
+          type: string
+          example: apihub-agent-server
+        status:
+          type: string
+          example: UP
+        time:
+          type: string
+          example: '2026-06-19 23:46:43'
+        javaVersion:
+          type: string
+          example: '17'
+    DbHealthResponse:
+      type: object
+      required:
+        - databaseName
+        - tableCount
+        - keyTableRows
+      properties:
+        databaseName:
+          type: string
+          example: apihub_agent
+        tableCount:
+          type: integer
+          example: 17
+        keyTableRows:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            sys_user: 5
+            api_endpoint: 5
+            api_call_stat_hourly: 11
+            gateway_log: 8
+            agent_session: 4
+    DemoUserResponse:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - userType
+        - orgName
+        - status
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        username:
+          type: string
+          example: admin_apihub
+        displayName:
+          type: string
+          example: API Hub Admin
+        userType:
+          type: string
+          example: MANAGER
+        orgName:
+          type: string
+          example: Information Center
+        status:
+          type: string
+          example: ACTIVE
+    UserVO:
+      $ref: '#/components/schemas/DemoUserResponse'
+    UserPageResponse:
+      type: object
+      required:
+        - items
+        - total
+        - pageNo
+        - pageSize
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DemoUserResponse'
+          example:
+            - id: 1
+              username: admin_apihub
+              displayName: API Hub Admin
+              userType: MANAGER
+              orgName: Information Center
+              status: ACTIVE
+        total:
+          type: integer
+          format: int64
+          example: 5
+        pageNo:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+    UserSwitchRequest:
+      type: object
+      required:
+        - userId
+      properties:
+        userId:
+          type: integer
+          format: int64
+          example: 1
