@@ -611,6 +611,82 @@ Run-SmokeTest `
         return $ok
     }
 
+Run-SmokeTest `
+    -Name "tool chain scenarios list" `
+    -Method "GET" `
+    -Path "/api/dev/eval/tool-chain/scenarios" `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $scenarioCodes = @($response.data | ForEach-Object { $_.scenarioCode })
+        $ok = Assert-Contains -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "AUTH_LOGIN_403_DIAG" -ActualList $scenarioCodes
+        $ok = (Assert-Contains -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "LECTURE_REGISTER_PEAK" -ActualList $scenarioCodes) -and $ok
+        $ok = (Assert-Contains -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "VENUE_RESERVE_IDEMPOTENCY" -ActualList $scenarioCodes) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool chain run auth login 403" `
+    -Method "POST" `
+    -Path "/api/dev/eval/tool-chain/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"scenarioCode":"AUTH_LOGIN_403_DIAG","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "AUTH_LOGIN_403_DIAG" -Actual $response.data.scenarioCode
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.apiCode" -Expected "AUTH_LOGIN" -Actual $response.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.stepCount" -Threshold 3 -Actual $response.data.stepCount) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.mergedEvidenceItems.Count" -Threshold 0 -Actual @($response.data.mergedEvidenceItems).Count) -and $ok
+        $ok = (Assert-NotBlank -Name $name -Endpoint $endpoint -Field "data.templateConclusion" -Actual $response.data.templateConclusion) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool chain run lecture peak" `
+    -Method "POST" `
+    -Path "/api/dev/eval/tool-chain/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"scenarioCode":"LECTURE_REGISTER_PEAK","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "LECTURE_REGISTER_PEAK" -Actual $response.data.scenarioCode
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.stepCount" -Threshold 4 -Actual $response.data.stepCount) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.mergedEvidenceItems.Count" -Threshold 0 -Actual @($response.data.mergedEvidenceItems).Count) -and $ok
+        $ok = (Assert-NotBlank -Name $name -Endpoint $endpoint -Field "data.templateConclusion" -Actual $response.data.templateConclusion) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool chain run unknown scenario" `
+    -Method "POST" `
+    -Path "/api/dev/eval/tool-chain/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"scenarioCode":"UNKNOWN_SCENARIO"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "SCENARIO_NOT_FOUND" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool chain run invalid time range" `
+    -Method "POST" `
+    -Path "/api/dev/eval/tool-chain/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"scenarioCode":"AUTH_LOGIN_403_DIAG","startTime":"2026-06-20 00:00:00","endTime":"2026-06-19 00:00:00"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "INVALID_ARGUMENT" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
 if ($script:Failed -gt 0) {
     Write-Host "Smoke test failed: $script:Failed failure(s)." -ForegroundColor Red
     exit 1

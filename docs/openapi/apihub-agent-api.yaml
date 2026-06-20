@@ -1022,6 +1022,140 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/dev/eval/tool-chain/scenarios:
+    get:
+      tags:
+        - Dev Eval
+      summary: Dev-only deterministic Tool Chain Eval scenario list
+      description: Lists fixed Tool Chain Eval scenarios used before Agent integration. This is not a formal Agent API.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+      responses:
+        '200':
+          description: Scenario list wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolChainScenarioList'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      - scenarioCode: AUTH_LOGIN_403_DIAG
+                        scenarioName: Unified login 403 diagnosis chain
+                        defaultApiCode: AUTH_LOGIN
+                        toolSequence:
+                          - queryApiInfo
+                          - queryApiCallStats
+                          - queryGatewayLogs
+                          - queryAlertEvents
+                          - queryApiDocs
+                      - scenarioCode: LECTURE_REGISTER_PEAK
+                        scenarioName: Lecture registration peak warning chain
+                        defaultApiCode: LECTURE_REGISTER
+                    traceId: trace_req_demo_eval_list
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/dev/eval/tool-chain/run:
+    post:
+      tags:
+        - Dev Eval
+      summary: Dev-only deterministic Tool Chain Eval runner
+      description: Runs a fixed pre-Agent Tool chain, merges ToolResult evidenceItems, and returns a template conclusion. It does not call LLM, DashScope, SSE, Milvus, or Embedding and does not write evidence_item or agent_report.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToolChainEvalRunRequest'
+            examples:
+              authLogin:
+                value:
+                  scenarioCode: AUTH_LOGIN_403_DIAG
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+              lecturePeak:
+                value:
+                  scenarioCode: LECTURE_REGISTER_PEAK
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+      responses:
+        '200':
+          description: ToolChainEvalResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolChainEvalResult'
+              examples:
+                authLoginSuccess:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      scenarioCode: AUTH_LOGIN_403_DIAG
+                      scenarioName: Unified login 403 diagnosis chain
+                      apiCode: AUTH_LOGIN
+                      apiName: School Account Login
+                      stepCount: 5
+                      passedStepCount: 5
+                      failedStepCount: 0
+                      steps:
+                        - stepNo: 1
+                          toolName: queryApiInfo
+                          success: true
+                          evidenceCount: 0
+                        - stepNo: 3
+                          toolName: queryGatewayLogs
+                          success: true
+                          evidenceCount: 5
+                      mergedEvidenceItems:
+                        - evidenceType: GATEWAY_LOG
+                          sourceType: gateway_log
+                          sourceId: '6001'
+                          title: Gateway log sample for AUTH_LOGIN
+                      riskLevel: HIGH
+                      templateConclusion: AUTH_LOGIN shows a 403-related diagnostic chain.
+                      traceId: trace_req_demo_eval_auth
+                      latencyMs: 45
+                    traceId: trace_req_demo_eval_auth
+                lecturePeakSuccess:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      scenarioCode: LECTURE_REGISTER_PEAK
+                      apiCode: LECTURE_REGISTER
+                      stepCount: 7
+                      mergedEvidenceItems:
+                        - evidenceType: CAMPUS_EVENT
+                          sourceType: campus_event
+                          sourceId: '8001'
+                      templateConclusion: LECTURE_REGISTER risk is consistent with a lecture signup business peak.
+                    traceId: trace_req_demo_eval_lecture
+                scenarioNotFound:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      scenarioCode: UNKNOWN_SCENARIO
+                      errorCode: SCENARIO_NOT_FOUND
+                      errorMessage: 'scenario not found: UNKNOWN_SCENARIO'
+                      riskLevel: UNKNOWN
+                      templateConclusion: 'scenario not found: UNKNOWN_SCENARIO'
+                    traceId: trace_req_demo_eval_unknown
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   parameters:
     XTraceId:
@@ -1429,6 +1563,139 @@ components:
           type: integer
           default: 5
           maximum: 20
+    ToolChainEvalRunRequest:
+      type: object
+      required:
+        - scenarioCode
+      properties:
+        scenarioCode:
+          type: string
+          example: AUTH_LOGIN_403_DIAG
+        apiCode:
+          type: string
+          example: AUTH_LOGIN
+        startTime:
+          type: string
+          example: '2026-06-19 00:00:00'
+        endTime:
+          type: string
+          example: '2026-06-19 23:59:59'
+    ApiResponseToolChainScenarioList:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolChainScenario'
+        traceId:
+          type: string
+    ToolChainScenario:
+      type: object
+      properties:
+        scenarioCode:
+          type: string
+        scenarioName:
+          type: string
+        defaultApiCode:
+          type: string
+        purpose:
+          type: string
+        toolSequence:
+          type: array
+          items:
+            type: string
+    ApiResponseToolChainEvalResult:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/ToolChainEvalResult'
+        traceId:
+          type: string
+    ToolChainEvalResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        scenarioCode:
+          type: string
+        scenarioName:
+          type: string
+        apiCode:
+          type: string
+        apiName:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        stepCount:
+          type: integer
+        passedStepCount:
+          type: integer
+        failedStepCount:
+          type: integer
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolChainEvalStep'
+        mergedEvidenceItems:
+          type: array
+          items:
+            type: object
+        riskLevel:
+          type: string
+        riskReasons:
+          type: array
+          items:
+            type: string
+        templateConclusion:
+          type: string
+        errorCode:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        traceId:
+          type: string
+        latencyMs:
+          type: integer
+          format: int64
+    ToolChainEvalStep:
+      type: object
+      properties:
+        stepNo:
+          type: integer
+        toolName:
+          type: string
+        purpose:
+          type: string
+        success:
+          type: boolean
+        summary:
+          type: string
+        errorCode:
+          type: string
+          nullable: true
+        latencyMs:
+          type: integer
+          format: int64
+        evidenceCount:
+          type: integer
+        keyData:
+          type: object
     ApiResponseToolResult:
       type: object
       required:

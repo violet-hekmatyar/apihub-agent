@@ -22,6 +22,8 @@ Covered endpoints:
 - `POST /api/dev/tools/queryAlertEvents`
 - `POST /api/dev/tools/queryCampusEvents`
 - `POST /api/dev/tools/queryApiDocs`
+- `GET /api/dev/eval/tool-chain/scenarios`
+- `POST /api/dev/eval/tool-chain/run`
 
 Current validation assets:
 
@@ -104,6 +106,14 @@ Validate the dev-only Tool path for campus business event context, including suc
 
 Validate the dev-only Tool path for API document chunk lookup, including MySQL keyword search mode, success, API_NOT_FOUND behavior, permission-denied behavior, and response-only document chunk evidence.
 
+`GET /api/dev/eval/tool-chain/scenarios`
+
+Validate the dev-only deterministic Tool Chain Eval scenario catalog before Agent integration.
+
+`POST /api/dev/eval/tool-chain/run`
+
+Validate deterministic Tool chains for fixed diagnostic scenarios. The eval endpoint calls existing Tools, merges `evidenceItems`, and returns a template conclusion. It does not call Agent, LLM, SSE, Milvus, Embedding, or DashScope.
+
 ## P0 Tool Smoke Cases
 
 - `queryApiInfo` with manager user `1` and `AUTH_LOGIN` must return `ToolResult.success=true`.
@@ -125,6 +135,14 @@ Validate the dev-only Tool path for API document chunk lookup, including MySQL k
 - `queryApiDocs` with manager user `1`, `LECTURE_REGISTER`, and keyword `rate` must return `ToolResult.success=true` and `searchMode=MYSQL_KEYWORD`.
 - `queryApiDocs` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
 - `queryApiDocs` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
+
+## Tool Chain Eval Smoke Cases
+
+- Scenario list must include `AUTH_LOGIN_403_DIAG`, `LECTURE_REGISTER_PEAK`, and `VENUE_RESERVE_IDEMPOTENCY`.
+- Running `AUTH_LOGIN_403_DIAG` must return `apiCode=AUTH_LOGIN`, at least four steps, non-empty merged evidence, and a non-empty template conclusion.
+- Running `LECTURE_REGISTER_PEAK` must return `apiCode=LECTURE_REGISTER`, at least five steps, non-empty merged evidence, and a non-empty template conclusion.
+- Running `UNKNOWN_SCENARIO` must return `success=false` and `errorCode=SCENARIO_NOT_FOUND`.
+- Running a scenario with `startTime > endTime` must return `success=false` and `errorCode=INVALID_ARGUMENT`.
 
 ## Apifox Import Instructions
 
@@ -156,9 +174,11 @@ The script prints `[PASS]` or `[FAIL]` for each case. Any failure exits with cod
 
 This round validates only backend base APIs and dev-only P0 Tool query APIs. It still does not validate Agent execution, SSE streaming, LLM integration, RAG search, frontend behavior, gateway behavior, full authentication, or production monitoring.
 
-Generated Tool `evidenceItems` are validated only as response payloads in this round. The smoke script does not expect rows to be written into `evidence_item`. The current smoke coverage is backend base APIs plus API info, call stats, gateway log, rate-limit rule, alert event, campus event, and API document query Tools.
+Generated Tool `evidenceItems` are validated only as response payloads in this round. The smoke script does not expect rows to be written into `evidence_item`. The current smoke coverage is backend base APIs plus seven P0 Tools and deterministic Tool Chain Eval.
 
 `queryApiDocs` currently validates MySQL keyword retrieval from `rag_document` and `rag_chunk_meta`. It is not Milvus vector retrieval and does not call LLM, Embedding, Agent, SSE, or DashScope.
+
+Tool Chain Eval is also not Agent execution. It does not write `agent_report` and does not generate free-form natural-language reports.
 
 ## Future Expansion
 

@@ -16,6 +16,8 @@ This round implements only:
 - `POST /api/dev/tools/queryAlertEvents`
 - `POST /api/dev/tools/queryCampusEvents`
 - `POST /api/dev/tools/queryApiDocs`
+- `GET /api/dev/eval/tool-chain/scenarios`
+- `POST /api/dev/eval/tool-chain/run`
 
 It does not implement Agent, SSE, RAG, JWT, Spring Security, Redis, Nacos, Milvus, or real external business APIs.
 
@@ -104,6 +106,8 @@ The smoke script covers:
 - `POST /api/dev/tools/queryAlertEvents`
 - `POST /api/dev/tools/queryCampusEvents`
 - `POST /api/dev/tools/queryApiDocs`
+- `GET /api/dev/eval/tool-chain/scenarios`
+- `POST /api/dev/eval/tool-chain/run`
 
 It validates response `code` values and key fields such as `data.status`, `data.databaseName`, `data.tableCount`, demo user `id`, and page-size capping.
 For Tool debug APIs it validates `ToolResult.success`, representative result fields, business failures, permission denial, and non-empty in-response evidence for log/rule success cases.
@@ -154,3 +158,23 @@ Tool business failures such as `API_NOT_FOUND`, `INVALID_ARGUMENT`, and `PERMISS
 `queryApiDocs` currently searches MySQL `rag_document` and `rag_chunk_meta` with keyword filters and returns `searchMode=MYSQL_KEYWORD`. It does not use Milvus, embeddings, DashScope, Agent, or SSE.
 
 `queryGatewayLogs`, `queryRateLimitRule`, `queryAlertEvents`, `queryCampusEvents`, and `queryApiDocs` return `evidenceItems` in the `ToolResult` response for later Agent/report assembly. This round does not persist those generated evidence items into the `evidence_item` table. Formal Agent integration will later organize Evidence, Trace, and reports through Agent Run.
+
+## Dev-Only Tool Chain Eval APIs
+
+These endpoints run deterministic Tool chains before Agent integration. They call the existing read-only Tools, merge returned evidence, and produce a template conclusion. They do not call LLMs, DashScope, SSE, Milvus, or Embedding, and they do not write `evidence_item` or `agent_report`.
+
+```powershell
+curl http://localhost:8080/api/dev/eval/tool-chain/scenarios
+
+curl -X POST http://localhost:8080/api/dev/eval/tool-chain/run `
+  -H "Content-Type: application/json" `
+  -H "X-Demo-User-Id: 1" `
+  -d "{\"scenarioCode\":\"AUTH_LOGIN_403_DIAG\",\"startTime\":\"2026-06-19 00:00:00\",\"endTime\":\"2026-06-19 23:59:59\"}"
+
+curl -X POST http://localhost:8080/api/dev/eval/tool-chain/run `
+  -H "Content-Type: application/json" `
+  -H "X-Demo-User-Id: 1" `
+  -d "{\"scenarioCode\":\"LECTURE_REGISTER_PEAK\",\"startTime\":\"2026-06-19 00:00:00\",\"endTime\":\"2026-06-19 23:59:59\"}"
+```
+
+Supported scenarios are `AUTH_LOGIN_403_DIAG`, `LECTURE_REGISTER_PEAK`, `VENUE_RESERVE_IDEMPOTENCY`, and `LIBRARY_BORROW_DEPENDENCY`.

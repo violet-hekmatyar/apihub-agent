@@ -59,6 +59,8 @@ Implemented now for all 7 APIs:
 
 `queryRateLimitRule` returns data only for APIs that have seeded rate-limit rules, such as `AUTH_LOGIN`, `LECTURE_REGISTER`, and `VENUE_RESERVE`. `queryCampusEvents` returns business context for seeded events such as lecture signup, semester start, notice publish, and venue reservation open windows. `queryApiDocs` is an internal Tool for reading documentation about external APIs; it must not be modeled as an external API.
 
+Tool Chain Eval scenarios are deterministic backend evaluation chains that combine these Tools before Agent integration. They are not external business APIs and are not formal Agent runs.
+
 ## Scenario Matrix
 
 | Scenario Type | APIs | Seed Evidence | Tools To Call | Expected Evidence Types | Agent Analysis Direction |
@@ -91,6 +93,10 @@ The seed data supports these first-round evaluation paths:
 - In the current backend Tool layer, alert event and campus event evidence is also returned inside `ToolResult.evidenceItems`; it is not persisted into `evidence_item`.
 - `queryApiDocs` can retrieve seeded MySQL document chunks for `AUTH_LOGIN` signature rules and error codes, `LECTURE_REGISTER` peak/rate-limit guidance, `VENUE_RESERVE` idempotency notes, and `LIBRARY_BORROW` dependency timeout troubleshooting.
 - `queryApiDocs` does not perform vector search in the current round; Milvus, Embedding, and DashScope remain outside the implemented boundary.
+- `AUTH_LOGIN_403_DIAG` combines API metadata, stats, 403 gateway logs, alerts, and signature docs for the unified-login 403 diagnosis path.
+- `LECTURE_REGISTER_PEAK` combines campus events, stats, 429 logs, rate-limit rules, alerts, and docs for the lecture signup peak path.
+- `VENUE_RESERVE_IDEMPOTENCY` combines stats, duplicate/idempotency logs, campus event context, alerts, and docs for duplicate-submit risk.
+- `LIBRARY_BORROW_DEPENDENCY` combines stats, timeout logs, alerts, and docs for downstream dependency risk.
 
 ## Current Boundary
 
