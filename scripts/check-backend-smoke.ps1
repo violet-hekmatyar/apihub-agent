@@ -369,6 +369,82 @@ Run-SmokeTest `
         return $ok
     }
 
+Run-SmokeTest `
+    -Name "tool queryGatewayLogs auth 403 success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryGatewayLogs" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"AUTH_LOGIN","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59","httpStatus":403,"limit":20}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryGatewayLogs" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "AUTH_LOGIN" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.data.totalMatched" -Threshold 0 -Actual $response.data.data.totalMatched) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.evidenceItems.Count" -Threshold 0 -Actual @($response.data.evidenceItems).Count) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryGatewayLogs invalid time range" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryGatewayLogs" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"AUTH_LOGIN","startTime":"2026-06-20 00:00:00","endTime":"2026-06-19 00:00:00"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "INVALID_ARGUMENT" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryRateLimitRule lecture register success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryRateLimitRule" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","includeInactive":false}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryRateLimitRule" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.data.activeRuleCount" -Threshold 0 -Actual $response.data.data.activeRuleCount) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.evidenceItems.Count" -Threshold 0 -Actual @($response.data.evidenceItems).Count) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryRateLimitRule api not found" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryRateLimitRule" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"UNKNOWN_API"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "API_NOT_FOUND" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryGatewayLogs permission denied" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryGatewayLogs" `
+    -Headers @{ "X-Demo-User-Id" = "4" } `
+    -Body '{"apiCode":"LIBRARY_BORROW"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "PERMISSION_DENIED" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
 if ($script:Failed -gt 0) {
     Write-Host "Smoke test failed: $script:Failed failure(s)." -ForegroundColor Red
     exit 1

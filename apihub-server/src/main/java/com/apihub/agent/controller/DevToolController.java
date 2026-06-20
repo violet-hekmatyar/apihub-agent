@@ -4,6 +4,8 @@ import com.apihub.agent.common.BaseResponse;
 import com.apihub.agent.common.ResultUtils;
 import com.apihub.agent.model.dto.QueryApiCallStatsRequest;
 import com.apihub.agent.model.dto.QueryApiInfoRequest;
+import com.apihub.agent.model.dto.QueryGatewayLogsRequest;
+import com.apihub.agent.model.dto.QueryRateLimitRuleRequest;
 import com.apihub.agent.model.tool.ToolContext;
 import com.apihub.agent.model.tool.ToolResult;
 import com.apihub.agent.service.ToolService;
@@ -41,5 +43,25 @@ public class DevToolController {
     ) {
         ToolContext context = toolService.buildContext(userId, requestId);
         return ResultUtils.success(toolService.queryApiCallStatsWithTrace(request, context));
+    }
+
+    @PostMapping("/queryGatewayLogs")
+    public BaseResponse<ToolResult> queryGatewayLogs(
+            @RequestHeader(value = "X-Demo-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+            @RequestBody QueryGatewayLogsRequest request
+    ) {
+        ToolContext context = toolService.buildContext(userId, requestId);
+        return ResultUtils.success(toolService.queryGatewayLogsWithTrace(request, context));
+    }
+
+    @PostMapping("/queryRateLimitRule")
+    public BaseResponse<ToolResult> queryRateLimitRule(
+            @RequestHeader(value = "X-Demo-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+            @RequestBody QueryRateLimitRuleRequest request
+    ) {
+        ToolContext context = toolService.buildContext(userId, requestId);
+        return ResultUtils.success(toolService.queryRateLimitRuleWithTrace(request, context));
     }
 }

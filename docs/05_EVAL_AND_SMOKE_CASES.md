@@ -17,6 +17,8 @@ Covered endpoints:
 - `POST /api/users/switch`
 - `POST /api/dev/tools/queryApiInfo`
 - `POST /api/dev/tools/queryApiCallStats`
+- `POST /api/dev/tools/queryGatewayLogs`
+- `POST /api/dev/tools/queryRateLimitRule`
 
 Current validation assets:
 
@@ -30,6 +32,8 @@ The current implemented P0 Tools are:
 
 - `queryApiInfo`
 - `queryApiCallStats`
+- `queryGatewayLogs`
+- `queryRateLimitRule`
 
 ## Backend Base Interface Checklist
 
@@ -74,6 +78,14 @@ Validate the dev-only Tool path for API metadata lookup, including success, API_
 
 Validate the dev-only Tool path for hourly API call statistics, including success and invalid time-range handling.
 
+`POST /api/dev/tools/queryGatewayLogs`
+
+Validate the dev-only Tool path for gateway log samples, including success, invalid time range, evidence generation in the response, and permission-denied behavior.
+
+`POST /api/dev/tools/queryRateLimitRule`
+
+Validate the dev-only Tool path for rate-limit rule lookup, including success, API_NOT_FOUND behavior, and evidence generation in the response.
+
 ## P0 Tool Smoke Cases
 
 - `queryApiInfo` with manager user `1` and `AUTH_LOGIN` must return `ToolResult.success=true`.
@@ -81,6 +93,11 @@ Validate the dev-only Tool path for hourly API call statistics, including succes
 - `queryApiInfo` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
 - `queryApiCallStats` with `startTime > endTime` must return `ToolResult.success=false` and `errorCode=INVALID_ARGUMENT`.
 - `queryApiInfo` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
+- `queryGatewayLogs` with manager user `1`, `AUTH_LOGIN`, and HTTP status `403` must return matched gateway logs and non-empty response `evidenceItems`.
+- `queryGatewayLogs` with `startTime > endTime` must return `ToolResult.success=false` and `errorCode=INVALID_ARGUMENT`.
+- `queryRateLimitRule` with manager user `1` and `LECTURE_REGISTER` must return at least one active rule and non-empty response `evidenceItems`.
+- `queryRateLimitRule` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
+- `queryGatewayLogs` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
 
 ## Apifox Import Instructions
 
@@ -111,6 +128,8 @@ The script prints `[PASS]` or `[FAIL]` for each case. Any failure exits with cod
 ## Boundary
 
 This round validates only backend base APIs and dev-only P0 Tool query APIs. It still does not validate Agent execution, SSE streaming, LLM integration, RAG search, frontend behavior, gateway behavior, full authentication, or production monitoring.
+
+Generated Tool `evidenceItems` are validated only as response payloads in this round. The smoke script does not expect rows to be written into `evidence_item`.
 
 ## Future Expansion
 

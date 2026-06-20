@@ -5,14 +5,16 @@
 This document defines the first baseline of external business APIs managed by API-HUB Agent.
 It is the shared scenario source for later Tool, Evidence, Agent, and frontend Dashboard work.
 
-The current round only prepares mock MySQL seed facts and scenario documentation. It does not implement real business APIs, Tool execution, Agent execution, SSE, or frontend pages.
+The current round uses mock MySQL seed facts and dev-only read-only Tool execution for backend validation. It does not implement real business APIs, Agent execution, SSE, or frontend pages.
 
 Current implemented Tool support is limited to:
 
 - `queryApiInfo`
 - `queryApiCallStats`
+- `queryGatewayLogs`
+- `queryRateLimitRule`
 
-Other Tool names in this document are scenario design targets for later rounds.
+Other Tool names in this document, such as `queryApiDocs`, `queryAlertEvents`, and `queryCampusEvents`, are scenario design targets for later rounds.
 
 ## Boundary Between External APIs And Internal Capabilities
 
@@ -46,6 +48,10 @@ Implemented now for all 7 APIs:
 
 - `queryApiInfo`: returns basic API metadata with optional rate-limit and authorized caller summaries.
 - `queryApiCallStats`: returns hourly stat totals, latency indicators, rate-limit counts, and a simple risk level.
+- `queryGatewayLogs`: returns gateway log samples, status/app/error distributions, risk hints, and in-response `GATEWAY_LOG` evidence items.
+- `queryRateLimitRule`: returns active or optionally inactive rate-limit rules, check points, risk hints, and in-response `RATE_LIMIT_RULE` evidence items.
+
+`queryRateLimitRule` returns data only for APIs that have seeded rate-limit rules, such as `AUTH_LOGIN`, `LECTURE_REGISTER`, and `VENUE_RESERVE`.
 
 ## Scenario Matrix
 
@@ -70,10 +76,11 @@ The seed data supports these first-round evaluation paths:
 - Normal user permission denial: a failed `queryGatewayLogs` trace records `PERMISSION_DENIED` for cross-team log access.
 - Downstream dependency exception: `LIBRARY_BORROW` contains 5xx stats, timeout gateway logs, and alert evidence.
 - Venue reservation duplicate request / idempotency risk: `VENUE_RESERVE` contains 409/429 logs, rate-limit rule, and idempotency documentation.
+- In the current backend Tool layer, gateway log and rate-limit rule evidence is returned inside `ToolResult.evidenceItems`; it is not persisted into `evidence_item`.
 
 ## Current Boundary
 
 - Current data is mock demonstration data, not production data.
 - No real fault API is implemented in this round.
 - The current baseline uses MySQL seed rows to create queryable facts.
-- Later rounds can connect Tool implementations, Trace playback, Evidence persistence, Agent SSE, and frontend Dashboard views to these facts.
+- Later rounds can connect additional Tool implementations, Trace playback, Evidence persistence, Agent SSE, and frontend Dashboard views to these facts.

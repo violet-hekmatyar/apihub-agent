@@ -453,6 +453,205 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryGatewayLogs:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryGatewayLogs Tool debug endpoint
+      description: Queries gateway log samples for one external API. Evidence items are returned in ToolResult only and are not persisted to evidence_item in this round.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryGatewayLogsRequest'
+            examples:
+              authLogin403:
+                value:
+                  apiCode: AUTH_LOGIN
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+                  httpStatus: 403
+                  limit: 20
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryGatewayLogs
+                      summary: Gateway log query completed for AUTH_LOGIN.
+                      data:
+                        apiCode: AUTH_LOGIN
+                        apiName: School Account Login
+                        totalMatched: 5
+                        returnedCount: 5
+                        statusDistribution:
+                          403: 5
+                        logs:
+                          - logId: 6001
+                            apiCode: AUTH_LOGIN
+                            appCode: COURSE_HELPER
+                            httpStatus: 403
+                            errorCode: SIGNATURE_INVALID
+                            errorMessage: signature verification failed
+                            traceId: tr_20260619_auth_001
+                            requestTime: '2026-06-19 10:12:30'
+                        riskHints:
+                          - authentication or signature failures are present
+                      evidenceItems:
+                        - evidenceType: GATEWAY_LOG
+                          sourceType: gateway_log
+                          sourceId: '6001'
+                          title: Gateway log sample for AUTH_LOGIN
+                          quote: status=403 SIGNATURE_INVALID signature verification failed
+                          metadata:
+                            apiCode: AUTH_LOGIN
+                            httpStatus: 403
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_gateway_logs
+                      spanId: span_queryGatewayLogs_demo
+                      latencyMs: 15
+                      extraInfo: {}
+                    traceId: trace_req_demo_gateway_logs
+                invalidArgument:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryGatewayLogs
+                      summary: Invalid time range.
+                      data: null
+                      evidenceItems: []
+                      errorCode: INVALID_ARGUMENT
+                      errorMessage: startTime must be before or equal to endTime
+                      traceId: trace_req_demo_gateway_invalid
+                      spanId: span_queryGatewayLogs_demo_invalid
+                      latencyMs: 5
+                      extraInfo: {}
+                    traceId: trace_req_demo_gateway_invalid
+                permissionDenied:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryGatewayLogs
+                      summary: Current user has no permission to query this API.
+                      data: null
+                      evidenceItems: []
+                      errorCode: PERMISSION_DENIED
+                      errorMessage: 'permission denied for api: LIBRARY_BORROW'
+                      traceId: trace_req_demo_gateway_denied
+                      spanId: span_queryGatewayLogs_demo_denied
+                      latencyMs: 7
+                      extraInfo: {}
+                    traceId: trace_req_demo_gateway_denied
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryRateLimitRule:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryRateLimitRule Tool debug endpoint
+      description: Queries rate limit rules for one external API. Evidence items are returned in ToolResult only and are not persisted to evidence_item in this round.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRateLimitRuleRequest'
+            examples:
+              lectureRegister:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  includeInactive: false
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryRateLimitRule
+                      summary: Rate limit rule query completed for LECTURE_REGISTER.
+                      data:
+                        apiCode: LECTURE_REGISTER
+                        apiName: Lecture Register
+                        includeInactive: false
+                        ruleCount: 1
+                        activeRuleCount: 1
+                        rules:
+                          - ruleId: 4002
+                            ruleName: Lecture register open-window rate limit
+                            limitType: QPS
+                            windowSeconds: 1
+                            maxRequests: 180
+                            threshold: 360
+                            status: ACTIVE
+                        riskHints:
+                          - rate limit rule exists; compare it with 429 logs and call stats during peak windows
+                      evidenceItems:
+                        - evidenceType: RATE_LIMIT_RULE
+                          sourceType: rate_limit_rule
+                          sourceId: '4002'
+                          title: Rate limit rule for LECTURE_REGISTER
+                          quote: Lecture register open-window rate limit qps=180 burst=360
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_rate_rule
+                      spanId: span_queryRateLimitRule_demo
+                      latencyMs: 10
+                      extraInfo: {}
+                    traceId: trace_req_demo_rate_rule
+                apiNotFound:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryRateLimitRule
+                      summary: API was not found.
+                      data: null
+                      evidenceItems: []
+                      errorCode: API_NOT_FOUND
+                      errorMessage: 'api not found: UNKNOWN_API'
+                      traceId: trace_req_demo_rate_not_found
+                      spanId: span_queryRateLimitRule_demo_not_found
+                      latencyMs: 6
+                      extraInfo: {}
+                    traceId: trace_req_demo_rate_not_found
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   parameters:
     XTraceId:
@@ -757,6 +956,41 @@ components:
         endTime:
           type: string
           example: '2026-06-19 23:59:59'
+    QueryGatewayLogsRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: AUTH_LOGIN
+        startTime:
+          type: string
+          example: '2026-06-19 00:00:00'
+        endTime:
+          type: string
+          example: '2026-06-19 23:59:59'
+        httpStatus:
+          type: integer
+          example: 403
+        keyword:
+          type: string
+          example: signature
+        limit:
+          type: integer
+          default: 20
+          maximum: 100
+    QueryRateLimitRuleRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: LECTURE_REGISTER
+        includeInactive:
+          type: boolean
+          default: false
     ApiResponseToolResult:
       type: object
       required:
