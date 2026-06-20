@@ -652,6 +652,376 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryAlertEvents:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryAlertEvents Tool debug endpoint
+      description: Queries alert events for one external API. Evidence items are returned in ToolResult only and are not persisted to evidence_item in this round.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryAlertEventsRequest'
+            examples:
+              lectureRegisterAlerts:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+                  severity: HIGH
+                  status: OPEN
+                  limit: 20
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryAlertEvents
+                      summary: Alert event query completed for LECTURE_REGISTER.
+                      data:
+                        apiCode: LECTURE_REGISTER
+                        apiName: Lecture Register
+                        totalMatched: 1
+                        returnedCount: 1
+                        severityDistribution:
+                          HIGH: 1
+                        statusDistribution:
+                          OPEN: 1
+                        openAlertCount: 1
+                        highestSeverity: HIGH
+                        alerts:
+                          - alertId: 7002
+                            alertCode: ALERT_LECTURE_REGISTER_P95_20260619
+                            alertType: HIGH_LATENCY
+                            severity: HIGH
+                            status: OPEN
+                            title: LECTURE_REGISTER P95 increased
+                        riskHints:
+                          - high severity alerts exist; prioritize investigation
+                      evidenceItems:
+                        - evidenceType: ALERT_EVENT
+                          sourceType: alert_event
+                          sourceId: '7002'
+                          title: LECTURE_REGISTER P95 increased
+                          quote: 'HIGH OPEN HIGH_LATENCY: LECTURE_REGISTER P95 increased'
+                          metadata:
+                            apiCode: LECTURE_REGISTER
+                            severity: HIGH
+                            status: OPEN
+                            alertType: HIGH_LATENCY
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_alert_events
+                      spanId: span_queryAlertEvents_demo
+                      latencyMs: 10
+                      extraInfo: {}
+                    traceId: trace_req_demo_alert_events
+                invalidArgument:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryAlertEvents
+                      summary: Invalid time range.
+                      data: null
+                      evidenceItems: []
+                      errorCode: INVALID_ARGUMENT
+                      errorMessage: startTime must be before or equal to endTime
+                      traceId: trace_req_demo_alert_invalid
+                      spanId: span_queryAlertEvents_demo_invalid
+                      latencyMs: 5
+                      extraInfo: {}
+                    traceId: trace_req_demo_alert_invalid
+                permissionDenied:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryAlertEvents
+                      summary: Current user has no permission to query this API.
+                      data: null
+                      evidenceItems: []
+                      errorCode: PERMISSION_DENIED
+                      errorMessage: 'permission denied for api: LIBRARY_BORROW'
+                      traceId: trace_req_demo_alert_denied
+                      spanId: span_queryAlertEvents_demo_denied
+                      latencyMs: 6
+                      extraInfo: {}
+                    traceId: trace_req_demo_alert_denied
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryCampusEvents:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryCampusEvents Tool debug endpoint
+      description: Queries campus business events related to one external API. Evidence items are returned in ToolResult only and are not persisted to evidence_item in this round.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryCampusEventsRequest'
+            examples:
+              lectureRegisterEvents:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+                  eventType: LECTURE_SIGNUP
+                  includeRelatedApis: true
+                  limit: 20
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryCampusEvents
+                      summary: Campus event query completed for LECTURE_REGISTER.
+                      data:
+                        apiCode: LECTURE_REGISTER
+                        apiName: Lecture Register
+                        totalMatched: 1
+                        returnedCount: 1
+                        events:
+                          - eventId: 8001
+                            eventCode: LECTURE_SIGNUP_20260619
+                            eventName: AI Lecture Signup Open
+                            eventType: LECTURE_SIGNUP
+                            eventStatus: ACTIVE
+                            expectedImpact: HIGH
+                            relatedApis:
+                              - apiCode: AUTH_LOGIN
+                              - apiCode: LECTURE_LIST
+                              - apiCode: LECTURE_REGISTER
+                        relatedApiCodes:
+                          - AUTH_LOGIN
+                          - LECTURE_LIST
+                          - LECTURE_REGISTER
+                        riskHints:
+                          - lecture signup event may explain a business traffic peak
+                      evidenceItems:
+                        - evidenceType: CAMPUS_EVENT
+                          sourceType: campus_event
+                          sourceId: '8001'
+                          title: AI Lecture Signup Open
+                          metadata:
+                            eventCode: LECTURE_SIGNUP_20260619
+                            eventType: LECTURE_SIGNUP
+                            apiCode: LECTURE_REGISTER
+                            relatedApis:
+                              - AUTH_LOGIN
+                              - LECTURE_LIST
+                              - LECTURE_REGISTER
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_campus_events
+                      spanId: span_queryCampusEvents_demo
+                      latencyMs: 12
+                      extraInfo: {}
+                    traceId: trace_req_demo_campus_events
+                apiNotFound:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryCampusEvents
+                      summary: API was not found.
+                      data: null
+                      evidenceItems: []
+                      errorCode: API_NOT_FOUND
+                      errorMessage: 'api not found: UNKNOWN_API'
+                      traceId: trace_req_demo_campus_not_found
+                      spanId: span_queryCampusEvents_demo_not_found
+                      latencyMs: 5
+                      extraInfo: {}
+                    traceId: trace_req_demo_campus_not_found
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryApiDocs:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryApiDocs Tool debug endpoint
+      description: Queries MySQL rag_document and rag_chunk_meta for API-related document chunks. searchMode is MYSQL_KEYWORD; this endpoint does not use Milvus, embeddings, DashScope, Agent, or SSE.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryApiDocsRequest'
+            examples:
+              authSignature:
+                value:
+                  apiCode: AUTH_LOGIN
+                  keyword: signature
+                  limit: 5
+              lectureRateLimit:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  keyword: rate
+                  limit: 5
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                authSignatureSuccess:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryApiDocs
+                      summary: API document query completed for AUTH_LOGIN.
+                      data:
+                        apiCode: AUTH_LOGIN
+                        apiName: School Account Login
+                        keyword: signature
+                        docType: null
+                        totalMatched: 4
+                        returnedCount: 4
+                        searchMode: MYSQL_KEYWORD
+                        docTypeDistribution:
+                          SIGN_RULE: 3
+                          ERROR_CODE: 1
+                        chunks:
+                          - chunkId: 11001
+                            documentId: 10001
+                            documentTitle: AUTH_LOGIN Signature Rule
+                            docType: SIGN_RULE
+                            chunkIndex: 0
+                            content: For AUTH_LOGIN, caller builds signature from accessKey, timestamp, nonce, requestBody, and mock_***.
+                            score: 0.9
+                        riskHints:
+                          - check signature algorithm, timestamp, nonce, and secret configuration first
+                      evidenceItems:
+                        - evidenceType: DOC_CHUNK
+                          sourceType: rag_chunk_meta
+                          sourceId: '11001'
+                          title: Signature verification flow
+                          quote: For AUTH_LOGIN, caller builds signature from accessKey, timestamp, nonce, requestBody, and mock_***.
+                          score: 0.9
+                          metadata:
+                            apiCode: AUTH_LOGIN
+                            documentId: 10001
+                            docType: SIGN_RULE
+                            keyword: signature
+                            chunkIndex: 0
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_docs_auth
+                      spanId: span_queryApiDocs_demo
+                      latencyMs: 10
+                      extraInfo: {}
+                    traceId: trace_req_demo_docs_auth
+                lectureRateSuccess:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryApiDocs
+                      summary: API document query completed for LECTURE_REGISTER.
+                      data:
+                        apiCode: LECTURE_REGISTER
+                        keyword: rate
+                        searchMode: MYSQL_KEYWORD
+                        totalMatched: 1
+                        returnedCount: 1
+                      evidenceItems:
+                        - evidenceType: DOC_CHUNK
+                          sourceType: rag_chunk_meta
+                          sourceId: '11005'
+                          title: Lecture register open window
+                          score: 0.6
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_docs_lecture
+                      spanId: span_queryApiDocs_demo_lecture
+                      latencyMs: 9
+                      extraInfo: {}
+                    traceId: trace_req_demo_docs_lecture
+                apiNotFound:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryApiDocs
+                      summary: API was not found.
+                      data: null
+                      evidenceItems: []
+                      errorCode: API_NOT_FOUND
+                      errorMessage: 'api not found: UNKNOWN_API'
+                      traceId: trace_req_demo_docs_not_found
+                      spanId: span_queryApiDocs_demo_not_found
+                      latencyMs: 4
+                      extraInfo: {}
+                    traceId: trace_req_demo_docs_not_found
+                permissionDenied:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryApiDocs
+                      summary: Current user has no permission to query this API.
+                      data: null
+                      evidenceItems: []
+                      errorCode: PERMISSION_DENIED
+                      errorMessage: 'permission denied for api: LIBRARY_BORROW'
+                      traceId: trace_req_demo_docs_denied
+                      spanId: span_queryApiDocs_demo_denied
+                      latencyMs: 5
+                      extraInfo: {}
+                    traceId: trace_req_demo_docs_denied
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   parameters:
     XTraceId:
@@ -991,6 +1361,74 @@ components:
         includeInactive:
           type: boolean
           default: false
+    QueryAlertEventsRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: LECTURE_REGISTER
+        startTime:
+          type: string
+          example: '2026-06-19 00:00:00'
+        endTime:
+          type: string
+          example: '2026-06-19 23:59:59'
+        severity:
+          type: string
+          example: HIGH
+        status:
+          type: string
+          description: OPEN maps to unresolved alerts; RESOLVED maps to resolved alerts.
+          example: OPEN
+        limit:
+          type: integer
+          default: 20
+          maximum: 100
+    QueryCampusEventsRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: LECTURE_REGISTER
+        startTime:
+          type: string
+          example: '2026-06-19 00:00:00'
+        endTime:
+          type: string
+          example: '2026-06-19 23:59:59'
+        eventType:
+          type: string
+          example: LECTURE_SIGNUP
+        includeRelatedApis:
+          type: boolean
+          default: true
+        limit:
+          type: integer
+          default: 20
+          maximum: 100
+    QueryApiDocsRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: AUTH_LOGIN
+        keyword:
+          type: string
+          example: signature
+        docType:
+          type: string
+          description: Optional MySQL document type filter. SIGNATURE_RULE is normalized to SIGN_RULE.
+          example: SIGN_RULE
+        limit:
+          type: integer
+          default: 5
+          maximum: 20
     ApiResponseToolResult:
       type: object
       required:

@@ -13,8 +13,11 @@ Current implemented Tool support is limited to:
 - `queryApiCallStats`
 - `queryGatewayLogs`
 - `queryRateLimitRule`
+- `queryAlertEvents`
+- `queryCampusEvents`
+- `queryApiDocs`
 
-Other Tool names in this document, such as `queryApiDocs`, `queryAlertEvents`, and `queryCampusEvents`, are scenario design targets for later rounds.
+The current `queryApiDocs` implementation is MySQL keyword retrieval over `rag_document` and `rag_chunk_meta`; it is not Milvus vector retrieval.
 
 ## Boundary Between External APIs And Internal Capabilities
 
@@ -34,12 +37,12 @@ Internal platform capabilities are not external APIs and must not be stored in `
 
 ## External API List
 
-| API Code | API Name | Main Callers | Business Purpose | Typical Incident Scenarios | Later Tools |
+| API Code | API Name | Main Callers | Business Purpose | Typical Incident Scenarios | Relevant Tools |
 | --- | --- | --- | --- | --- | --- |
 | `AUTH_LOGIN` | Unified Login API | Course Helper, Club Activity System, Lecture Portal | Campus account login, token refresh, unified identity authentication | 401/403 increase, signature failure, token expiry, timestamp/nonce failure, suspicious high-frequency failures | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryApiDocs`, `queryAlertEvents` |
 | `COURSE_TODAY` | Today Course Schedule API | Course Helper Mini App | Student daily course schedule, classroom, teaching-week info | Semester-start peak, cache pressure, P95/P99 increase, downstream academic system slow | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryAlertEvents` |
 | `LECTURE_LIST` | Lecture List API | College public account, Club Activity System, Lecture Portal | Recent lectures, lecture detail, signup status | Notice publish traffic increase, hot activity query increase, cache hit-rate drop | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryCampusEvents` |
-| `LECTURE_REGISTER` | Lecture Register API | Lecture Portal, activity signup systems | Student lecture registration and quota competition | Open-window concurrency, rate limit, repeated request, quota race, P95 increase | `queryApiInfo`, `queryApiCallStats`, `queryRateLimitRule`, `queryGatewayLogs`, `queryCampusEvents` |
+| `LECTURE_REGISTER` | Lecture Register API | Lecture Portal, activity signup systems | Student lecture registration and quota competition | Open-window concurrency, rate limit, repeated request, quota race, P95 increase | `queryApiInfo`, `queryApiCallStats`, `queryRateLimitRule`, `queryGatewayLogs`, `queryCampusEvents`, `queryApiDocs` |
 | `CAMPUS_NOTICE` | Campus Notice API | Course Helper, Student Service Portal, school sites | College notices, campus announcements, exam notices | Post-publish traffic spike, read-heavy access, stale cache, slow hot notice response | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryAlertEvents` |
 | `VENUE_RESERVE` | Venue Reserve API | Student Service Portal, club activity systems | Classroom, hall, lab, and activity venue reservation | Reservation open concurrency, duplicate submit, idempotency risk, 409/429 increase | `queryApiInfo`, `queryApiCallStats`, `queryRateLimitRule`, `queryGatewayLogs`, `queryApiDocs`, `queryAlertEvents` |
 | `LIBRARY_BORROW` | Library Borrow API | Library Mini App, study assistants | Borrow records, due reminders, renewal status | Downstream library service slow, dependency timeout, 5xx increase, external dependency unavailable | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryApiDocs`, `queryAlertEvents` |
@@ -50,8 +53,11 @@ Implemented now for all 7 APIs:
 - `queryApiCallStats`: returns hourly stat totals, latency indicators, rate-limit counts, and a simple risk level.
 - `queryGatewayLogs`: returns gateway log samples, status/app/error distributions, risk hints, and in-response `GATEWAY_LOG` evidence items.
 - `queryRateLimitRule`: returns active or optionally inactive rate-limit rules, check points, risk hints, and in-response `RATE_LIMIT_RULE` evidence items.
+- `queryAlertEvents`: returns alert event summaries, severity/status distributions, open alert counts, risk hints, and in-response `ALERT_EVENT` evidence items.
+- `queryCampusEvents`: returns campus business event context, related API codes, risk hints, and in-response `CAMPUS_EVENT` evidence items.
+- `queryApiDocs`: returns MySQL document chunks for external API documentation, signing rules, error codes, rate-limit notes, and troubleshooting manuals with in-response `DOC_CHUNK` evidence items.
 
-`queryRateLimitRule` returns data only for APIs that have seeded rate-limit rules, such as `AUTH_LOGIN`, `LECTURE_REGISTER`, and `VENUE_RESERVE`.
+`queryRateLimitRule` returns data only for APIs that have seeded rate-limit rules, such as `AUTH_LOGIN`, `LECTURE_REGISTER`, and `VENUE_RESERVE`. `queryCampusEvents` returns business context for seeded events such as lecture signup, semester start, notice publish, and venue reservation open windows. `queryApiDocs` is an internal Tool for reading documentation about external APIs; it must not be modeled as an external API.
 
 ## Scenario Matrix
 
@@ -77,6 +83,14 @@ The seed data supports these first-round evaluation paths:
 - Downstream dependency exception: `LIBRARY_BORROW` contains 5xx stats, timeout gateway logs, and alert evidence.
 - Venue reservation duplicate request / idempotency risk: `VENUE_RESERVE` contains 409/429 logs, rate-limit rule, and idempotency documentation.
 - In the current backend Tool layer, gateway log and rate-limit rule evidence is returned inside `ToolResult.evidenceItems`; it is not persisted into `evidence_item`.
+- `AUTH_LOGIN` has alert context for 403 increase and campus event context through lecture signup and semester-start events.
+- `LECTURE_REGISTER` has high-latency alert context and lecture signup campus event context with related `AUTH_LOGIN` and `LECTURE_LIST` APIs.
+- `COURSE_TODAY` has a stable traffic alert and semester-start campus event context.
+- `VENUE_RESERVE` has duplicate-submit alert context and venue reservation open-window campus event context.
+- `LIBRARY_BORROW` has downstream dependency alert context; it currently has no seeded campus business event relation.
+- In the current backend Tool layer, alert event and campus event evidence is also returned inside `ToolResult.evidenceItems`; it is not persisted into `evidence_item`.
+- `queryApiDocs` can retrieve seeded MySQL document chunks for `AUTH_LOGIN` signature rules and error codes, `LECTURE_REGISTER` peak/rate-limit guidance, `VENUE_RESERVE` idempotency notes, and `LIBRARY_BORROW` dependency timeout troubleshooting.
+- `queryApiDocs` does not perform vector search in the current round; Milvus, Embedding, and DashScope remain outside the implemented boundary.
 
 ## Current Boundary
 

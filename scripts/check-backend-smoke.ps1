@@ -141,6 +141,32 @@ function Assert-GreaterThan {
     return $true
 }
 
+function Assert-Contains {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Endpoint,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Field,
+
+        [Parameter(Mandatory = $false)]
+        $Expected,
+
+        [Parameter(Mandatory = $false)]
+        $ActualList
+    )
+
+    if (@($ActualList) -notcontains $Expected) {
+        Write-Fail -Name $Name -Endpoint $Endpoint -Expected "$Field contains $Expected" -Actual "$Field=$($ActualList -join ',')"
+        return $false
+    }
+
+    return $true
+}
+
 function Assert-NotBlank {
     param(
         [Parameter(Mandatory = $true)]
@@ -437,6 +463,146 @@ Run-SmokeTest `
     -Path "/api/dev/tools/queryGatewayLogs" `
     -Headers @{ "X-Demo-User-Id" = "4" } `
     -Body '{"apiCode":"LIBRARY_BORROW"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "PERMISSION_DENIED" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryAlertEvents lecture register success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryAlertEvents" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59","limit":20}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryAlertEvents" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.data.totalMatched" -Threshold 0 -Actual $response.data.data.totalMatched) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.evidenceItems.Count" -Threshold 0 -Actual @($response.data.evidenceItems).Count) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryCampusEvents lecture register success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryCampusEvents" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59","includeRelatedApis":true,"limit":20}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryCampusEvents" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.data.totalMatched" -Threshold 0 -Actual $response.data.data.totalMatched) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.evidenceItems.Count" -Threshold 0 -Actual @($response.data.evidenceItems).Count) -and $ok
+        $relatedApiCodes = @($response.data.data.relatedApiCodes)
+        $ok = (Assert-Contains -Name $name -Endpoint $endpoint -Field "data.data.relatedApiCodes" -Expected "LECTURE_REGISTER" -ActualList $relatedApiCodes) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryAlertEvents invalid time range" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryAlertEvents" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","startTime":"2026-06-20 00:00:00","endTime":"2026-06-19 00:00:00"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "INVALID_ARGUMENT" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryCampusEvents api not found" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryCampusEvents" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"UNKNOWN_API"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "API_NOT_FOUND" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryAlertEvents permission denied" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryAlertEvents" `
+    -Headers @{ "X-Demo-User-Id" = "4" } `
+    -Body '{"apiCode":"LIBRARY_BORROW"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "PERMISSION_DENIED" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiDocs auth signature success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiDocs" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"AUTH_LOGIN","keyword":"signature","limit":5}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryApiDocs" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "AUTH_LOGIN" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.searchMode" -Expected "MYSQL_KEYWORD" -Actual $response.data.data.searchMode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.data.totalMatched" -Threshold 0 -Actual $response.data.data.totalMatched) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.evidenceItems.Count" -Threshold 0 -Actual @($response.data.evidenceItems).Count) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiDocs lecture rate success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiDocs" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","keyword":"rate","limit":5}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryApiDocs" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.searchMode" -Expected "MYSQL_KEYWORD" -Actual $response.data.data.searchMode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiDocs api not found" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiDocs" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"UNKNOWN_API","keyword":"signature"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "API_NOT_FOUND" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiDocs permission denied" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiDocs" `
+    -Headers @{ "X-Demo-User-Id" = "4" } `
+    -Body '{"apiCode":"LIBRARY_BORROW","keyword":"timeout"}' `
     -ExpectedCode 200 `
     -ExtraChecks {
         param($response, $name, $endpoint)

@@ -19,6 +19,9 @@ Covered endpoints:
 - `POST /api/dev/tools/queryApiCallStats`
 - `POST /api/dev/tools/queryGatewayLogs`
 - `POST /api/dev/tools/queryRateLimitRule`
+- `POST /api/dev/tools/queryAlertEvents`
+- `POST /api/dev/tools/queryCampusEvents`
+- `POST /api/dev/tools/queryApiDocs`
 
 Current validation assets:
 
@@ -34,6 +37,9 @@ The current implemented P0 Tools are:
 - `queryApiCallStats`
 - `queryGatewayLogs`
 - `queryRateLimitRule`
+- `queryAlertEvents`
+- `queryCampusEvents`
+- `queryApiDocs`
 
 ## Backend Base Interface Checklist
 
@@ -86,6 +92,18 @@ Validate the dev-only Tool path for gateway log samples, including success, inva
 
 Validate the dev-only Tool path for rate-limit rule lookup, including success, API_NOT_FOUND behavior, and evidence generation in the response.
 
+`POST /api/dev/tools/queryAlertEvents`
+
+Validate the dev-only Tool path for structured alert events, including success, invalid time range, permission-denied behavior, and response-only alert evidence.
+
+`POST /api/dev/tools/queryCampusEvents`
+
+Validate the dev-only Tool path for campus business event context, including success, API_NOT_FOUND behavior, related API context, and response-only campus event evidence.
+
+`POST /api/dev/tools/queryApiDocs`
+
+Validate the dev-only Tool path for API document chunk lookup, including MySQL keyword search mode, success, API_NOT_FOUND behavior, permission-denied behavior, and response-only document chunk evidence.
+
 ## P0 Tool Smoke Cases
 
 - `queryApiInfo` with manager user `1` and `AUTH_LOGIN` must return `ToolResult.success=true`.
@@ -98,6 +116,15 @@ Validate the dev-only Tool path for rate-limit rule lookup, including success, A
 - `queryRateLimitRule` with manager user `1` and `LECTURE_REGISTER` must return at least one active rule and non-empty response `evidenceItems`.
 - `queryRateLimitRule` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
 - `queryGatewayLogs` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
+- `queryAlertEvents` with manager user `1` and `LECTURE_REGISTER` must return at least one alert and non-empty response `evidenceItems`.
+- `queryCampusEvents` with manager user `1` and `LECTURE_REGISTER` must return at least one campus event, related API context, and non-empty response `evidenceItems`.
+- `queryAlertEvents` with `startTime > endTime` must return `ToolResult.success=false` and `errorCode=INVALID_ARGUMENT`.
+- `queryCampusEvents` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
+- `queryAlertEvents` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
+- `queryApiDocs` with manager user `1`, `AUTH_LOGIN`, and keyword `signature` must return `searchMode=MYSQL_KEYWORD`, at least one document chunk, and non-empty response `evidenceItems`.
+- `queryApiDocs` with manager user `1`, `LECTURE_REGISTER`, and keyword `rate` must return `ToolResult.success=true` and `searchMode=MYSQL_KEYWORD`.
+- `queryApiDocs` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
+- `queryApiDocs` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
 
 ## Apifox Import Instructions
 
@@ -129,7 +156,9 @@ The script prints `[PASS]` or `[FAIL]` for each case. Any failure exits with cod
 
 This round validates only backend base APIs and dev-only P0 Tool query APIs. It still does not validate Agent execution, SSE streaming, LLM integration, RAG search, frontend behavior, gateway behavior, full authentication, or production monitoring.
 
-Generated Tool `evidenceItems` are validated only as response payloads in this round. The smoke script does not expect rows to be written into `evidence_item`.
+Generated Tool `evidenceItems` are validated only as response payloads in this round. The smoke script does not expect rows to be written into `evidence_item`. The current smoke coverage is backend base APIs plus API info, call stats, gateway log, rate-limit rule, alert event, campus event, and API document query Tools.
+
+`queryApiDocs` currently validates MySQL keyword retrieval from `rag_document` and `rag_chunk_meta`. It is not Milvus vector retrieval and does not call LLM, Embedding, Agent, SSE, or DashScope.
 
 ## Future Expansion
 
