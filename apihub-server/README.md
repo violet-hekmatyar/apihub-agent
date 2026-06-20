@@ -9,8 +9,10 @@ This round implements only:
 - `GET /api/users/current`
 - `GET /api/users`
 - `POST /api/users/switch`
+- `POST /api/dev/tools/queryApiInfo`
+- `POST /api/dev/tools/queryApiCallStats`
 
-It does not implement Agent, Tool Calling, SSE, RAG, JWT, Spring Security, Redis, Nacos, or Milvus.
+It does not implement Agent, SSE, RAG, JWT, Spring Security, Redis, Nacos, Milvus, or real external business APIs.
 
 ## Build
 
@@ -92,3 +94,21 @@ The smoke script covers:
 - `POST /api/users/switch`
 
 It validates response `code` values and key fields such as `data.status`, `data.databaseName`, `data.tableCount`, demo user `id`, and page-size capping.
+
+## Dev-Only Tool Debug APIs
+
+These endpoints are for backend development and smoke validation only. They are not formal frontend entry points. Later Agent code should call the Tool service internally.
+
+```powershell
+curl -X POST http://localhost:8080/api/dev/tools/queryApiInfo `
+  -H "Content-Type: application/json" `
+  -H "X-Demo-User-Id: 1" `
+  -d "{\"apiCode\":\"AUTH_LOGIN\",\"includeRateLimit\":true,\"includeConsumerApps\":true}"
+
+curl -X POST http://localhost:8080/api/dev/tools/queryApiCallStats `
+  -H "Content-Type: application/json" `
+  -H "X-Demo-User-Id: 1" `
+  -d "{\"apiCode\":\"LECTURE_REGISTER\",\"startTime\":\"2026-06-19 00:00:00\",\"endTime\":\"2026-06-19 23:59:59\"}"
+```
+
+Tool business failures such as `API_NOT_FOUND` and `PERMISSION_DENIED` are returned as `ToolResult.success=false` inside an outer `code=200` response. Each Tool call writes a `tool_call_trace` row. Because the current database schema requires `tool_call_trace.session_id`, dev-only calls create or reuse a lightweight dev session when no Agent session exists.

@@ -115,6 +115,55 @@ function Assert-Equal {
     return $true
 }
 
+function Assert-GreaterThan {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Endpoint,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Field,
+
+        [Parameter(Mandatory = $false)]
+        $Threshold,
+
+        [Parameter(Mandatory = $false)]
+        $Actual
+    )
+
+    if ($Actual -le $Threshold) {
+        Write-Fail -Name $Name -Endpoint $Endpoint -Expected "$Field>$Threshold" -Actual "$Field=$Actual"
+        return $false
+    }
+
+    return $true
+}
+
+function Assert-NotBlank {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Endpoint,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Field,
+
+        [Parameter(Mandatory = $false)]
+        $Actual
+    )
+
+    if ($null -eq $Actual -or [string]::IsNullOrWhiteSpace([string]$Actual)) {
+        Write-Fail -Name $Name -Endpoint $Endpoint -Expected "$Field is not blank" -Actual "$Field=$Actual"
+        return $false
+    }
+
+    return $true
+}
+
 function Run-SmokeTest {
     param(
         [Parameter(Mandatory = $true)]
@@ -245,6 +294,80 @@ Run-SmokeTest `
     -Path "/api/users/switch" `
     -Body '{}' `
     -ExpectedCode 400
+
+Run-SmokeTest `
+    -Name "tool queryApiInfo admin success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiInfo" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"AUTH_LOGIN","includeRateLimit":true,"includeConsumerApps":true}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryApiInfo" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "AUTH_LOGIN" -Actual $response.data.data.apiCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiCallStats admin success" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiCallStats" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.toolName" -Expected "queryApiCallStats" -Actual $response.data.toolName) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.data.totalCallCount" -Threshold 0 -Actual $response.data.data.totalCallCount) -and $ok
+        $ok = (Assert-NotBlank -Name $name -Endpoint $endpoint -Field "data.data.riskLevel" -Actual $response.data.data.riskLevel) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiInfo api not found" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiInfo" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"UNKNOWN_API"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "API_NOT_FOUND" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiCallStats invalid time range" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiCallStats" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","startTime":"2026-06-20 00:00:00","endTime":"2026-06-19 00:00:00"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "INVALID_ARGUMENT" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "tool queryApiInfo permission denied" `
+    -Method "POST" `
+    -Path "/api/dev/tools/queryApiInfo" `
+    -Headers @{ "X-Demo-User-Id" = "4" } `
+    -Body '{"apiCode":"LIBRARY_BORROW"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "PERMISSION_DENIED" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
 
 if ($script:Failed -gt 0) {
     Write-Host "Smoke test failed: $script:Failed failure(s)." -ForegroundColor Red

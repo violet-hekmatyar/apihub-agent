@@ -7,6 +7,13 @@ It is the shared scenario source for later Tool, Evidence, Agent, and frontend D
 
 The current round only prepares mock MySQL seed facts and scenario documentation. It does not implement real business APIs, Tool execution, Agent execution, SSE, or frontend pages.
 
+Current implemented Tool support is limited to:
+
+- `queryApiInfo`
+- `queryApiCallStats`
+
+Other Tool names in this document are scenario design targets for later rounds.
+
 ## Boundary Between External APIs And Internal Capabilities
 
 `api_endpoint` stores only business APIs exposed by API-HUB to caller applications.
@@ -34,6 +41,11 @@ Internal platform capabilities are not external APIs and must not be stored in `
 | `CAMPUS_NOTICE` | Campus Notice API | Course Helper, Student Service Portal, school sites | College notices, campus announcements, exam notices | Post-publish traffic spike, read-heavy access, stale cache, slow hot notice response | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryAlertEvents` |
 | `VENUE_RESERVE` | Venue Reserve API | Student Service Portal, club activity systems | Classroom, hall, lab, and activity venue reservation | Reservation open concurrency, duplicate submit, idempotency risk, 409/429 increase | `queryApiInfo`, `queryApiCallStats`, `queryRateLimitRule`, `queryGatewayLogs`, `queryApiDocs`, `queryAlertEvents` |
 | `LIBRARY_BORROW` | Library Borrow API | Library Mini App, study assistants | Borrow records, due reminders, renewal status | Downstream library service slow, dependency timeout, 5xx increase, external dependency unavailable | `queryApiInfo`, `queryApiCallStats`, `queryGatewayLogs`, `queryApiDocs`, `queryAlertEvents` |
+
+Implemented now for all 7 APIs:
+
+- `queryApiInfo`: returns basic API metadata with optional rate-limit and authorized caller summaries.
+- `queryApiCallStats`: returns hourly stat totals, latency indicators, rate-limit counts, and a simple risk level.
 
 ## Scenario Matrix
 

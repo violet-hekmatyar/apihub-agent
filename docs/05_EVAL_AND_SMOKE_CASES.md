@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the current validation assets for the API-HUB Agent backend base interfaces. It is intentionally limited to basic backend reachability, database health, and demo user APIs.
+This document defines the current validation assets for the API-HUB Agent backend base interfaces and P0 read-only Tool debug APIs.
 
 This is not a production-complete test plan. It is a concise smoke-test baseline for the current skeleton.
 
@@ -15,6 +15,8 @@ Covered endpoints:
 - `GET /api/users/current`
 - `GET /api/users`
 - `POST /api/users/switch`
+- `POST /api/dev/tools/queryApiInfo`
+- `POST /api/dev/tools/queryApiCallStats`
 
 Current validation assets:
 
@@ -23,6 +25,11 @@ Current validation assets:
 - External API scenario baseline: `docs/06_EXTERNAL_API_SCENARIOS.md`
 
 The external API scenario baseline defines which mocked business APIs are managed by API-HUB Agent. It is the foundation for later Tool and Agent evaluation, including Tool selection, evidence generation, and diagnostic answer quality.
+
+The current implemented P0 Tools are:
+
+- `queryApiInfo`
+- `queryApiCallStats`
 
 ## Backend Base Interface Checklist
 
@@ -59,6 +66,22 @@ Validate basic pagination and the current page-size cap behavior.
 
 Validate demo user switch input handling for a valid user and a missing `userId`.
 
+`POST /api/dev/tools/queryApiInfo`
+
+Validate the dev-only Tool path for API metadata lookup, including success, API_NOT_FOUND, and permission-denied behavior.
+
+`POST /api/dev/tools/queryApiCallStats`
+
+Validate the dev-only Tool path for hourly API call statistics, including success and invalid time-range handling.
+
+## P0 Tool Smoke Cases
+
+- `queryApiInfo` with manager user `1` and `AUTH_LOGIN` must return `ToolResult.success=true`.
+- `queryApiCallStats` with manager user `1` and `LECTURE_REGISTER` must return call totals and a non-empty risk level.
+- `queryApiInfo` with `UNKNOWN_API` must return `ToolResult.success=false` and `errorCode=API_NOT_FOUND`.
+- `queryApiCallStats` with `startTime > endTime` must return `ToolResult.success=false` and `errorCode=INVALID_ARGUMENT`.
+- `queryApiInfo` with normal user `4` querying unrelated `LIBRARY_BORROW` must return `ToolResult.success=false` and `errorCode=PERMISSION_DENIED`.
+
 ## Apifox Import Instructions
 
 1. Open Apifox and choose OpenAPI import.
@@ -87,7 +110,7 @@ The script prints `[PASS]` or `[FAIL]` for each case. Any failure exits with cod
 
 ## Boundary
 
-This round does not validate Agent execution, Tool Calling, SSE streaming, RAG search, frontend behavior, gateway behavior, authentication, authorization, or production monitoring.
+This round validates only backend base APIs and dev-only P0 Tool query APIs. It still does not validate Agent execution, SSE streaming, LLM integration, RAG search, frontend behavior, gateway behavior, full authentication, or production monitoring.
 
 ## Future Expansion
 

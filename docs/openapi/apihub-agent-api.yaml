@@ -15,6 +15,8 @@ tags:
     description: Service and database health checks.
   - name: Users
     description: Demo user context and user list APIs.
+  - name: Dev Tools
+    description: Dev-only Tool debugging APIs. These are not formal frontend entry points.
 paths:
   /api/health:
     get:
@@ -256,6 +258,201 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryApiInfo:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryApiInfo Tool debug endpoint
+      description: |
+        Runs the queryApiInfo Tool through a development-only HTTP endpoint.
+        Business Tool failures are returned inside ToolResult with outer code=200.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryApiInfoRequest'
+            examples:
+              authLogin:
+                value:
+                  apiCode: AUTH_LOGIN
+                  includeRateLimit: true
+                  includeConsumerApps: true
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryApiInfo
+                      summary: API info query completed for AUTH_LOGIN.
+                      data:
+                        apiCode: AUTH_LOGIN
+                        apiName: School Account Login
+                        apiType: AUTH
+                        providerUserId: 2
+                        providerName: Auth API Provider
+                        ownerTeam: Identity Center
+                        riskLevel: HIGH
+                        onlineStatus: ONLINE
+                        status: ACTIVE
+                        path: /api/auth/login
+                        method: POST
+                        rateLimitRules:
+                          - ruleName: Default login rate limit
+                            qpsLimit: 300
+                            burstLimit: 600
+                            degradeEnabled: true
+                        consumerApps:
+                          - appCode: COURSE_HELPER
+                            appName: Course Helper Mini App
+                            authStatus: APPROVED
+                      evidenceItems: []
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_tool_info
+                      spanId: span_queryApiInfo_demo
+                      latencyMs: 12
+                      extraInfo: {}
+                    traceId: trace_req_demo_tool_info
+                apiNotFound:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryApiInfo
+                      summary: API was not found.
+                      data: null
+                      evidenceItems: []
+                      errorCode: API_NOT_FOUND
+                      errorMessage: 'api not found: UNKNOWN_API'
+                      traceId: trace_req_demo_tool_not_found
+                      spanId: span_queryApiInfo_demo_not_found
+                      latencyMs: 8
+                      extraInfo: {}
+                    traceId: trace_req_demo_tool_not_found
+                permissionDenied:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryApiInfo
+                      summary: Current user has no permission to query this API.
+                      data: null
+                      evidenceItems: []
+                      errorCode: PERMISSION_DENIED
+                      errorMessage: 'permission denied for api: LIBRARY_BORROW'
+                      traceId: trace_req_demo_tool_denied
+                      spanId: span_queryApiInfo_demo_denied
+                      latencyMs: 9
+                      extraInfo: {}
+                    traceId: trace_req_demo_tool_denied
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/dev/tools/queryApiCallStats:
+    post:
+      tags:
+        - Dev Tools
+      summary: Dev-only queryApiCallStats Tool debug endpoint
+      description: |
+        Runs the queryApiCallStats Tool through a development-only HTTP endpoint.
+        This endpoint is for backend Tool validation before Agent integration.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryApiCallStatsRequest'
+            examples:
+              lectureRegister:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+      responses:
+        '200':
+          description: ToolResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseToolResult'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      toolName: queryApiCallStats
+                      summary: API call stats query completed for LECTURE_REGISTER.
+                      data:
+                        apiCode: LECTURE_REGISTER
+                        apiName: Lecture Register
+                        startTime: '2026-06-19 00:00:00'
+                        endTime: '2026-06-19 23:59:59'
+                        totalCallCount: 20400
+                        totalSuccessCount: 18640
+                        totalFailCount: 1760
+                        failRate: 0.0863
+                        avgLatencyMs: 173
+                        maxP95LatencyMs: 720
+                        maxP99LatencyMs: 1180
+                        totalRateLimitedCount: 704
+                        riskLevel: HIGH
+                        riskReasons:
+                          - fail rate is elevated
+                          - P95 latency is high
+                          - rate limited calls increased
+                        hourlyStats: []
+                      evidenceItems: []
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_tool_stats
+                      spanId: span_queryApiCallStats_demo
+                      latencyMs: 18
+                      extraInfo: {}
+                    traceId: trace_req_demo_tool_stats
+                invalidArgument:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      toolName: queryApiCallStats
+                      summary: Invalid time range.
+                      data: null
+                      evidenceItems: []
+                      errorCode: INVALID_ARGUMENT
+                      errorMessage: startTime must be before or equal to endTime
+                      traceId: trace_req_demo_tool_invalid
+                      spanId: span_queryApiCallStats_demo_invalid
+                      latencyMs: 5
+                      extraInfo: {}
+                    traceId: trace_req_demo_tool_invalid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   parameters:
     XTraceId:
@@ -275,6 +472,14 @@ components:
         type: integer
         format: int64
       example: 1
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Optional request id for dev Tool debugging.
+      schema:
+        type: string
+      example: req_dev_tool_001
   responses:
     BadRequest:
       description: Bad request business error example.
@@ -524,3 +729,98 @@ components:
           type: integer
           format: int64
           example: 1
+    QueryApiInfoRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: AUTH_LOGIN
+        includeRateLimit:
+          type: boolean
+          default: false
+        includeConsumerApps:
+          type: boolean
+          default: false
+    QueryApiCallStatsRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: LECTURE_REGISTER
+        startTime:
+          type: string
+          example: '2026-06-19 00:00:00'
+        endTime:
+          type: string
+          example: '2026-06-19 23:59:59'
+    ApiResponseToolResult:
+      type: object
+      required:
+        - code
+        - message
+        - data
+        - traceId
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/ToolResult'
+        traceId:
+          type: string
+          example: trace_req_demo_tool
+    ToolResult:
+      type: object
+      required:
+        - success
+        - toolName
+        - summary
+        - evidenceItems
+        - traceId
+        - spanId
+        - latencyMs
+        - extraInfo
+      properties:
+        success:
+          type: boolean
+        toolName:
+          type: string
+          example: queryApiInfo
+        summary:
+          type: string
+        data:
+          nullable: true
+          description: Tool-specific structured result.
+        evidenceItems:
+          type: array
+          items:
+            type: object
+          example: []
+        errorCode:
+          type: string
+          nullable: true
+          example: API_NOT_FOUND
+        errorMessage:
+          type: string
+          nullable: true
+          example: 'api not found: UNKNOWN_API'
+        traceId:
+          type: string
+          example: trace_req_demo_tool
+        spanId:
+          type: string
+          example: span_queryApiInfo_demo
+        latencyMs:
+          type: integer
+          format: int64
+          example: 12
+        extraInfo:
+          type: object
+          additionalProperties: true
