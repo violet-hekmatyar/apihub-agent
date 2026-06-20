@@ -1,0 +1,548 @@
+openapi: 3.0.3
+info:
+  title: API-HUB Mock Provider API
+  version: 0.1.0
+  description: |
+    Standalone mock provider for external business APIs managed by API-HUB.
+    This is not an apihub-agent internal API and does not call Agent, Tool, LLM,
+    DashScope, Milvus, Embedding, or any database.
+servers:
+  - url: http://localhost:8090
+    description: Local mock provider
+tags:
+  - name: Health
+  - name: Mock APIs
+components:
+  parameters:
+    XTraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      example: mock_trace_demo
+    XMockScenario:
+      name: X-Mock-Scenario
+      in: header
+      required: false
+      description: Explicit scenario trigger. Takes priority over mockScenario.
+      schema:
+        type: string
+      example: SIGNATURE_MISMATCH
+  schemas:
+    MockResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          type: object
+          nullable: true
+          additionalProperties: true
+        traceId:
+          type: string
+          example: mock_trace_demo
+    AuthLoginRequest:
+      type: object
+      properties:
+        appCode:
+          type: string
+          example: COURSE_HELPER
+        studentNo:
+          type: string
+          example: '2023001001'
+        timestamp:
+          type: string
+          example: '2026-06-19T12:00:00'
+        nonce:
+          type: string
+          example: mock_nonce_001
+        signature:
+          type: string
+          example: mock_signature_valid
+        mockScenario:
+          type: string
+          example: NORMAL
+    LectureRegisterRequest:
+      type: object
+      properties:
+        lectureId:
+          type: string
+          example: lec_20260619_ai_001
+        studentNo:
+          type: string
+          example: '2023001001'
+        idempotencyKey:
+          type: string
+          example: idem_001
+        mockScenario:
+          type: string
+          example: NORMAL
+    VenueReserveRequest:
+      type: object
+      properties:
+        venueId:
+          type: string
+          example: venue_report_hall_201
+        studentNo:
+          type: string
+          example: '2023001001'
+        reserveDate:
+          type: string
+          example: '2026-06-20'
+        timeRange:
+          type: string
+          example: 19:00-21:00
+        idempotencyKey:
+          type: string
+          example: idem_venue_001
+        mockScenario:
+          type: string
+          example: NORMAL
+paths:
+  /mock-provider/health:
+    get:
+      tags:
+        - Health
+      summary: Mock provider health check
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+      responses:
+        '200':
+          description: Provider is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                success:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      app: apihub-mock-provider
+                      status: UP
+                      time: '2026-06-20 18:30:00'
+                      javaVersion: '17'
+                    traceId: mock_trace_demo
+  /mock-provider/auth/login:
+    post:
+      tags:
+        - Mock APIs
+      summary: AUTH_LOGIN mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthLoginRequest'
+            examples:
+              normal:
+                value:
+                  appCode: COURSE_HELPER
+                  studentNo: '2023001001'
+                  timestamp: '2026-06-19T12:00:00'
+                  nonce: mock_nonce_001
+                  signature: mock_signature_valid
+              signatureMismatch:
+                value:
+                  appCode: COURSE_HELPER
+                  studentNo: '2023001001'
+                  mockScenario: SIGNATURE_MISMATCH
+      responses:
+        '200':
+          description: Normal login returns a mock token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      studentNo: '2023001001'
+                      displayName: Mock Student
+                      accessToken: mock_token_AUTH_LOGIN_001
+                      expiresIn: 7200
+                      tokenType: Bearer
+                    traceId: mock_trace_auth
+        '401':
+          description: TOKEN_EXPIRED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                tokenExpired:
+                  value:
+                    code: 401
+                    message: token expired
+                    data: null
+                    traceId: mock_trace_auth_expired
+        '403':
+          description: Signature, timestamp, nonce, or app error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                signatureMismatch:
+                  value:
+                    code: 403
+                    message: signature mismatch
+                    data: null
+                    traceId: mock_trace_auth_denied
+  /mock-provider/course/today:
+    get:
+      tags:
+        - Mock APIs
+      summary: COURSE_TODAY mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+        - name: studentNo
+          in: query
+          schema:
+            type: string
+          example: '2023001001'
+        - name: date
+          in: query
+          schema:
+            type: string
+          example: '2026-06-19'
+        - name: mockScenario
+          in: query
+          schema:
+            type: string
+          example: CACHE_MISS
+      responses:
+        '200':
+          description: Normal, slow, downstream slow, or cache miss response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      studentNo: '2023001001'
+                      date: '2026-06-19'
+                      cacheHit: true
+                      courses:
+                        - courseName: Software Engineering
+                          teacher: Teacher Wang
+                          timeRange: '08:30-10:10'
+                          room: Teaching Building A301
+                          weekNo: 16
+                    traceId: mock_trace_course
+                cacheMiss:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      studentNo: '2023001001'
+                      cacheHit: false
+                      scenarioHint: cache miss
+                    traceId: mock_trace_course_cache
+        '504':
+          description: COURSE_SYSTEM_TIMEOUT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                timeout:
+                  value:
+                    code: 504
+                    message: course system timeout
+                    data: null
+                    traceId: mock_trace_course_timeout
+  /mock-provider/lecture/list:
+    get:
+      tags:
+        - Mock APIs
+      summary: LECTURE_LIST mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+        - name: date
+          in: query
+          schema:
+            type: string
+          example: '2026-06-19'
+        - name: mockScenario
+          in: query
+          schema:
+            type: string
+          example: HOT_READ
+      responses:
+        '200':
+          description: Normal, hot read, or slow response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      date: '2026-06-19'
+                      cacheHit: true
+                      lectures:
+                        - lectureId: lec_20260619_ai_001
+                          title: Large Model Application Development Practice
+                          location: Academic Hall 201
+                          quota: 120
+                          registeredCount: 86
+                          registerStatus: OPEN
+                    traceId: mock_trace_lecture_list
+        '503':
+          description: SERVICE_BUSY.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                serviceBusy:
+                  value:
+                    code: 503
+                    message: lecture service busy
+                    data: null
+                    traceId: mock_trace_lecture_busy
+  /mock-provider/lecture/register:
+    post:
+      tags:
+        - Mock APIs
+      summary: LECTURE_REGISTER mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LectureRegisterRequest'
+            examples:
+              normal:
+                value:
+                  lectureId: lec_20260619_ai_001
+                  studentNo: '2023001001'
+                  idempotencyKey: idem_001
+              rateLimited:
+                value:
+                  lectureId: lec_20260619_ai_001
+                  studentNo: '2023001001'
+                  idempotencyKey: idem_001
+                  mockScenario: RATE_LIMITED
+      responses:
+        '200':
+          description: Normal or slow successful registration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      lectureId: lec_20260619_ai_001
+                      studentNo: '2023001001'
+                      registerStatus: SUCCESS
+                      ticketNo: ticket_mock_001
+                    traceId: mock_trace_lecture_register
+        '400':
+          description: IDEMPOTENCY_KEY_MISSING.
+        '409':
+          description: DUPLICATE_REQUEST or SOLD_OUT.
+        '429':
+          description: RATE_LIMITED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                rateLimited:
+                  value:
+                    code: 429
+                    message: too many requests
+                    data: null
+                    traceId: mock_trace_lecture_rate
+        '503':
+          description: SERVICE_BUSY.
+  /mock-provider/notice/list:
+    get:
+      tags:
+        - Mock APIs
+      summary: CAMPUS_NOTICE mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+        - name: category
+          in: query
+          schema:
+            type: string
+          example: exam
+        - name: mockScenario
+          in: query
+          schema:
+            type: string
+          example: HOT_NOTICE
+      responses:
+        '200':
+          description: Normal, hot notice, cache miss, or slow response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      category: exam
+                      cacheHit: true
+                      notices:
+                        - noticeId: notice_20260619_exam_001
+                          title: Final Exam Schedule Notice
+                          publishTime: '2026-06-19 09:00:00'
+                          publisher: Academic Affairs Office
+                    traceId: mock_trace_notice
+        '503':
+          description: SERVICE_BUSY.
+  /mock-provider/venue/reserve:
+    post:
+      tags:
+        - Mock APIs
+      summary: VENUE_RESERVE mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VenueReserveRequest'
+            examples:
+              normal:
+                value:
+                  venueId: venue_report_hall_201
+                  studentNo: '2023001001'
+                  reserveDate: '2026-06-20'
+                  timeRange: '19:00-21:00'
+                  idempotencyKey: idem_venue_001
+              conflict:
+                value:
+                  venueId: venue_report_hall_201
+                  studentNo: '2023001001'
+                  reserveDate: '2026-06-20'
+                  timeRange: '19:00-21:00'
+                  idempotencyKey: idem_venue_001
+                  mockScenario: RESERVATION_CONFLICT
+      responses:
+        '200':
+          description: Normal or slow successful reservation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      venueId: venue_report_hall_201
+                      reserveStatus: SUCCESS
+                      reserveNo: reserve_mock_001
+                    traceId: mock_trace_venue
+        '400':
+          description: IDEMPOTENCY_KEY_MISSING.
+        '409':
+          description: RESERVATION_CONFLICT or DUPLICATE_REQUEST.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                conflict:
+                  value:
+                    code: 409
+                    message: reservation conflict
+                    data: null
+                    traceId: mock_trace_venue_conflict
+        '429':
+          description: RATE_LIMITED.
+  /mock-provider/library/borrow:
+    get:
+      tags:
+        - Mock APIs
+      summary: LIBRARY_BORROW mock endpoint
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XMockScenario'
+        - name: studentNo
+          in: query
+          schema:
+            type: string
+          example: '2023001001'
+        - name: mockScenario
+          in: query
+          schema:
+            type: string
+          example: DOWNSTREAM_TIMEOUT
+      responses:
+        '200':
+          description: Normal or slow borrow record response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      studentNo: '2023001001'
+                      borrowRecords:
+                        - bookName: Understanding the Java Virtual Machine
+                          borrowDate: '2026-06-01'
+                          dueDate: '2026-07-01'
+                          status: BORROWED
+                    traceId: mock_trace_library
+        '500':
+          description: SERVICE_ERROR.
+        '503':
+          description: DEPENDENCY_UNAVAILABLE.
+        '504':
+          description: DOWNSTREAM_TIMEOUT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+              examples:
+                timeout:
+                  value:
+                    code: 504
+                    message: library downstream timeout
+                    data: null
+                    traceId: mock_trace_library_timeout
