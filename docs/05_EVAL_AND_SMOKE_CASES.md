@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the current validation assets for the API-HUB Agent backend base interfaces and P0 read-only Tool debug APIs.
+This document defines the current validation assets for the API-HUB Agent backend base interfaces, P0 read-only Tool debug APIs, deterministic Tool Chain Eval, and the first Agent Run/SSE skeleton.
 
 This is not a production-complete test plan. It is a concise smoke-test baseline for the current skeleton.
 
@@ -24,6 +24,8 @@ Covered endpoints:
 - `POST /api/dev/tools/queryApiDocs`
 - `GET /api/dev/eval/tool-chain/scenarios`
 - `POST /api/dev/eval/tool-chain/run`
+- `POST /api/agent/run`
+- `POST /api/agent/run/stream`
 
 Current validation assets:
 
@@ -114,6 +116,14 @@ Validate the dev-only deterministic Tool Chain Eval scenario catalog before Agen
 
 Validate deterministic Tool chains for fixed diagnostic scenarios. The eval endpoint calls existing Tools, merges `evidenceItems`, and returns a template conclusion. It does not call Agent, LLM, SSE, Milvus, Embedding, or DashScope.
 
+`POST /api/agent/run`
+
+Validate the first deterministic Agent Run skeleton. The endpoint selects a scenario, reuses Tool Chain Eval, persists `agent_session`, `agent_message`, `agent_report`, and `evidence_item`, and returns a template final answer. It does not call LLM, DashScope, Milvus, Embedding, auto-fix, or multi-agent workflows.
+
+`POST /api/agent/run/stream`
+
+Validate the SSE shape for Agent Run. The stream emits stage, Tool step, evidence, risk, answer, error, and done events. It is not token-by-token LLM streaming.
+
 ## P0 Tool Smoke Cases
 
 - `queryApiInfo` with manager user `1` and `AUTH_LOGIN` must return `ToolResult.success=true`.
@@ -144,6 +154,13 @@ Validate deterministic Tool chains for fixed diagnostic scenarios. The eval endp
 - Running `UNKNOWN_SCENARIO` must return `success=false` and `errorCode=SCENARIO_NOT_FOUND`.
 - Running a scenario with `startTime > endTime` must return `success=false` and `errorCode=INVALID_ARGUMENT`.
 
+## Agent Run Smoke Cases
+
+- Running `LECTURE_REGISTER_PEAK` through `POST /api/agent/run` must return `success=true`, `apiCode=LECTURE_REGISTER`, a positive `sessionId`, a positive `reportId`, non-empty `evidenceItems`, and a non-empty `finalAnswer`.
+- Running `POST /api/agent/run` without `scenarioCode` but with an auth/login 403 question must select `AUTH_LOGIN_403_DIAG`.
+- Running `POST /api/agent/run` with an unrelated question must return `success=false` and `errorCode=SCENARIO_NOT_MATCHED`.
+- Running `POST /api/agent/run/stream` must return SSE text containing `agent_start`, `tool_step`, `evidence`, `answer`, and `done`.
+
 ## Apifox Import Instructions
 
 1. Open Apifox and choose OpenAPI import.
@@ -172,13 +189,13 @@ The script prints `[PASS]` or `[FAIL]` for each case. Any failure exits with cod
 
 ## Boundary
 
-This round validates only backend base APIs and dev-only P0 Tool query APIs. It still does not validate Agent execution, SSE streaming, LLM integration, RAG search, frontend behavior, gateway behavior, full authentication, or production monitoring.
+This round validates backend base APIs, dev-only P0 Tool query APIs, deterministic Tool Chain Eval, and the first deterministic Agent Run/SSE skeleton. It still does not validate LLM integration, RAG vector search, frontend behavior, gateway behavior, full authentication, auto-fix, multi-agent behavior, or production monitoring.
 
-Generated Tool `evidenceItems` are validated only as response payloads in this round. The smoke script does not expect rows to be written into `evidence_item`. The current smoke coverage is backend base APIs plus seven P0 Tools and deterministic Tool Chain Eval.
+Generated Tool `evidenceItems` are validated as response payloads for Tool debug APIs. Agent Run persists merged evidence into `evidence_item`. The current smoke coverage is backend base APIs plus seven P0 Tools, deterministic Tool Chain Eval, and deterministic Agent Run/SSE.
 
 `queryApiDocs` currently validates MySQL keyword retrieval from `rag_document` and `rag_chunk_meta`. It is not Milvus vector retrieval and does not call LLM, Embedding, Agent, SSE, or DashScope.
 
-Tool Chain Eval is also not Agent execution. It does not write `agent_report` and does not generate free-form natural-language reports.
+Tool Chain Eval is not formal Agent execution. It does not write `agent_report` and does not generate free-form natural-language reports. Agent Run currently reuses Tool Chain Eval as its deterministic evidence baseline and writes a template report.
 
 ## Future Expansion
 

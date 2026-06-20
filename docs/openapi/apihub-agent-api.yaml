@@ -17,6 +17,10 @@ tags:
     description: Demo user context and user list APIs.
   - name: Dev Tools
     description: Dev-only Tool debugging APIs. These are not formal frontend entry points.
+  - name: Dev Eval
+    description: Dev-only deterministic Tool Chain Eval APIs.
+  - name: Agent Run
+    description: Deterministic Agent Run and SSE skeleton APIs.
 paths:
   /api/health:
     get:
@@ -1156,6 +1160,158 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/agent/run:
+    post:
+      tags:
+        - Agent Run
+      summary: Run deterministic Agent skeleton
+      description: |
+        Runs the first Agent Run skeleton. The backend selects a fixed scenario,
+        reuses Tool Chain Eval, persists agent_session/agent_message/agent_report/evidence_item,
+        and returns a deterministic template answer. It does not call LLM,
+        DashScope, Milvus, Embedding, auto-fix, or multi-agent workflows.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRunRequest'
+            examples:
+              lecturePeak:
+                value:
+                  scenarioCode: LECTURE_REGISTER_PEAK
+                  question: Analyze lecture registration peak risk
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+              questionMatchedAuth:
+                value:
+                  question: AUTH_LOGIN has many 403 signature token failures
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+      responses:
+        '200':
+          description: AgentRunResult wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAgentRunResult'
+              examples:
+                lecturePeakSuccess:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: true
+                      runId: run_20260620120000001
+                      sessionId: 101
+                      reportId: 88
+                      scenarioCode: LECTURE_REGISTER_PEAK
+                      scenarioName: Lecture registration peak warning chain
+                      apiCode: LECTURE_REGISTER
+                      apiName: Lecture Register
+                      question: Analyze lecture registration peak risk
+                      startTime: '2026-06-19 00:00:00'
+                      endTime: '2026-06-19 23:59:59'
+                      status: SUCCESS
+                      steps:
+                        - stepNo: 1
+                          toolName: queryApiInfo
+                          success: true
+                          evidenceCount: 0
+                        - stepNo: 2
+                          toolName: queryCampusEvents
+                          success: true
+                          evidenceCount: 2
+                      evidenceItems:
+                        - evidenceType: CAMPUS_EVENT
+                          sourceType: campus_event
+                          sourceId: '8001'
+                          title: Campus event for LECTURE_REGISTER
+                      riskLevel: HIGH
+                      riskReasons:
+                        - fail rate is elevated
+                      finalAnswer: Deterministic Agent Run result. LECTURE_REGISTER risk is consistent with a lecture signup business peak.
+                      errorCode: null
+                      errorMessage: null
+                      traceId: trace_req_demo_agent_run
+                      latencyMs: 86
+                    traceId: trace_req_demo_agent_run
+                scenarioNotMatched:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      success: false
+                      runId: run_20260620120000002
+                      scenarioCode: null
+                      status: FAILED
+                      errorCode: SCENARIO_NOT_MATCHED
+                      errorMessage: no deterministic scenario matched
+                      traceId: trace_req_demo_agent_no_match
+                      latencyMs: 3
+                    traceId: trace_req_demo_agent_no_match
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/agent/run/stream:
+    post:
+      tags:
+        - Agent Run
+      summary: Stream deterministic Agent skeleton events
+      description: |
+        Runs the same deterministic Agent skeleton and returns text/event-stream.
+        The stream emits stage, tool_step, evidence, risk, answer, error, and done events.
+        It is not token-by-token LLM streaming.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XDemoUserId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRunRequest'
+            examples:
+              lecturePeak:
+                value:
+                  scenarioCode: LECTURE_REGISTER_PEAK
+                  question: Stream lecture registration peak risk
+                  startTime: '2026-06-19 00:00:00'
+                  endTime: '2026-06-19 23:59:59'
+      responses:
+        '200':
+          description: Server-sent Agent Run events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                eventStream:
+                  value: |
+                    event: agent_start
+                    data: {"runId":"run_20260620120000003","scenarioCode":"LECTURE_REGISTER_PEAK"}
+
+                    event: tool_step
+                    data: {"stepNo":1,"toolName":"queryApiInfo","success":true}
+
+                    event: evidence
+                    data: {"sourceType":"campus_event","sourceId":"8001"}
+
+                    event: answer
+                    data: {"finalAnswer":"Deterministic Agent Run result..."}
+
+                    event: done
+                    data: {"success":true}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   parameters:
     XTraceId:
@@ -1696,6 +1852,141 @@ components:
           type: integer
         keyData:
           type: object
+    AgentRunRequest:
+      type: object
+      properties:
+        scenarioCode:
+          type: string
+          description: Optional fixed scenario code. Takes priority over question matching.
+          example: LECTURE_REGISTER_PEAK
+        apiCode:
+          type: string
+          description: Optional API code used for deterministic scenario matching.
+          example: LECTURE_REGISTER
+        question:
+          type: string
+          description: User question or diagnostic intent.
+          example: Analyze lecture registration peak risk
+        startTime:
+          type: string
+          example: '2026-06-19 00:00:00'
+        endTime:
+          type: string
+          example: '2026-06-19 23:59:59'
+        sessionId:
+          type: integer
+          format: int64
+          description: Optional existing agent_session id.
+          example: 101
+    ApiResponseAgentRunResult:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/AgentRunResult'
+        traceId:
+          type: string
+          example: trace_req_demo_agent_run
+    AgentRunResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        runId:
+          type: string
+        sessionId:
+          type: integer
+          format: int64
+          nullable: true
+        reportId:
+          type: integer
+          format: int64
+          nullable: true
+        scenarioCode:
+          type: string
+          nullable: true
+        scenarioName:
+          type: string
+          nullable: true
+        apiCode:
+          type: string
+          nullable: true
+        apiName:
+          type: string
+          nullable: true
+        question:
+          type: string
+          nullable: true
+        startTime:
+          type: string
+          nullable: true
+        endTime:
+          type: string
+          nullable: true
+        status:
+          type: string
+          example: SUCCESS
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolChainEvalStep'
+        evidenceItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentEvidenceItem'
+        riskLevel:
+          type: string
+          nullable: true
+          example: HIGH
+        riskReasons:
+          type: array
+          items:
+            type: string
+        finalAnswer:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+          example: SCENARIO_NOT_MATCHED
+        errorMessage:
+          type: string
+          nullable: true
+        traceId:
+          type: string
+        latencyMs:
+          type: integer
+          format: int64
+    AgentEvidenceItem:
+      type: object
+      additionalProperties: true
+      properties:
+        evidenceType:
+          type: string
+          example: CAMPUS_EVENT
+        sourceType:
+          type: string
+          example: campus_event
+        sourceId:
+          type: string
+          example: '8001'
+        title:
+          type: string
+          example: Campus event for LECTURE_REGISTER
+        quote:
+          type: string
+          example: Lecture signup opens at peak time.
+        summary:
+          type: string
+          example: Peak signup event related to LECTURE_REGISTER.
+        metadata:
+          type: object
+          additionalProperties: true
     ApiResponseToolResult:
       type: object
       required:

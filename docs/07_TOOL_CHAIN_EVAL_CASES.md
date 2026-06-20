@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document defines the deterministic Tool Chain Eval baseline before Agent integration.
+This document defines the deterministic Tool Chain Eval baseline used by the current Agent Run skeleton.
 
-It is not formal Agent output. It does not call an LLM, does not stream SSE, does not write `agent_report`, and does not write `evidence_item`. It verifies that the current read-only Tools can produce a stable evidence chain for later Agent runs.
+It is not formal Agent output. It does not call an LLM, does not stream SSE, does not write `agent_report`, and does not write `evidence_item`. It verifies that the current read-only Tools can produce a stable evidence chain. The first Agent Run skeleton now reuses this chain and performs Agent-side session, message, report, and evidence persistence.
 
 ## Implemented P0 Tools
 
@@ -24,7 +24,7 @@ Tool Chain Eval is deterministic backend orchestration:
 - It returns structured steps, merged evidence, risk reasons, and a template conclusion.
 - It does not generate a free-form natural-language report.
 - It does not call DashScope, Milvus, Embedding, SSE, or Agent runtime.
-- Later Agent work can reuse these chains as an evidence baseline.
+- The current Agent Run skeleton reuses these chains as an evidence baseline.
 
 ## Scenarios
 
@@ -62,7 +62,7 @@ Tool Chain Eval is deterministic backend orchestration:
 
 ## Current Limits And Next Steps
 
-- Agent, SSE, LLM, Milvus, and Embedding are not connected.
-- `evidence_item` and `agent_report` are not written.
-- The current result uses `mergedEvidenceItems` and `templateConclusion` only.
-- Next work can introduce Agent Run and SSE skeletons that consume these deterministic evidence chains.
+- Tool Chain Eval itself still does not connect Agent, SSE, LLM, Milvus, or Embedding.
+- Tool Chain Eval itself still does not write `evidence_item` or `agent_report`.
+- The Tool Chain Eval result uses `mergedEvidenceItems` and `templateConclusion` only.
+- Agent Run/SSE skeletons consume these deterministic evidence chains and add minimal Agent persistence.

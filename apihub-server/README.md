@@ -18,8 +18,10 @@ This round implements only:
 - `POST /api/dev/tools/queryApiDocs`
 - `GET /api/dev/eval/tool-chain/scenarios`
 - `POST /api/dev/eval/tool-chain/run`
+- `POST /api/agent/run`
+- `POST /api/agent/run/stream`
 
-It does not implement Agent, SSE, RAG, JWT, Spring Security, Redis, Nacos, Milvus, or real external business APIs.
+It implements only a deterministic Agent Run/SSE skeleton. It does not implement LLM calls, DashScope, Milvus, Embedding, JWT, Spring Security, Redis, Nacos, frontend APIs, auto-fix, multi-agent behavior, or real external business APIs.
 
 ## Build
 
@@ -108,9 +110,12 @@ The smoke script covers:
 - `POST /api/dev/tools/queryApiDocs`
 - `GET /api/dev/eval/tool-chain/scenarios`
 - `POST /api/dev/eval/tool-chain/run`
+- `POST /api/agent/run`
+- `POST /api/agent/run/stream`
 
 It validates response `code` values and key fields such as `data.status`, `data.databaseName`, `data.tableCount`, demo user `id`, and page-size capping.
 For Tool debug APIs it validates `ToolResult.success`, representative result fields, business failures, permission denial, and non-empty in-response evidence for log/rule success cases.
+For Agent Run it validates deterministic scenario selection, session/report ids, persisted-evidence source payloads via the API response, final answer presence, and basic SSE event types.
 
 ## Dev-Only Tool Debug APIs
 
@@ -178,3 +183,23 @@ curl -X POST http://localhost:8080/api/dev/eval/tool-chain/run `
 ```
 
 Supported scenarios are `AUTH_LOGIN_403_DIAG`, `LECTURE_REGISTER_PEAK`, `VENUE_RESERVE_IDEMPOTENCY`, and `LIBRARY_BORROW_DEPENDENCY`.
+
+## Agent Run And SSE Skeleton
+
+These endpoints are the first formal Agent-facing backend entry points. They reuse the deterministic Tool Chain Eval path, assemble a template answer, and persist minimal Agent records into the current schema.
+
+```powershell
+curl -X POST http://localhost:8080/api/agent/run `
+  -H "Content-Type: application/json" `
+  -H "X-Demo-User-Id: 1" `
+  -d "{\"scenarioCode\":\"LECTURE_REGISTER_PEAK\",\"question\":\"Analyze lecture registration peak risk\",\"startTime\":\"2026-06-19 00:00:00\",\"endTime\":\"2026-06-19 23:59:59\"}"
+
+curl.exe -N -X POST http://localhost:8080/api/agent/run/stream `
+  -H "Content-Type: application/json" `
+  -H "X-Demo-User-Id: 1" `
+  -d "{\"scenarioCode\":\"LECTURE_REGISTER_PEAK\",\"question\":\"Stream lecture registration peak risk\",\"startTime\":\"2026-06-19 00:00:00\",\"endTime\":\"2026-06-19 23:59:59\"}"
+```
+
+`scenarioCode` is preferred when present. If omitted, the backend uses simple deterministic matching from `apiCode` and `question` to select one of `AUTH_LOGIN_403_DIAG`, `LECTURE_REGISTER_PEAK`, `VENUE_RESERVE_IDEMPOTENCY`, or `LIBRARY_BORROW_DEPENDENCY`.
+
+Agent Run writes `agent_session`, `agent_message`, `agent_report`, and `evidence_item`. `tool_call_trace` is still written by the underlying Tools. The final answer is a deterministic template and does not use LLM, DashScope, Milvus, Embedding, or token streaming.

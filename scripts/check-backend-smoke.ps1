@@ -687,6 +687,90 @@ Run-SmokeTest `
         return $ok
     }
 
+Run-SmokeTest `
+    -Name "agent run lecture peak" `
+    -Method "POST" `
+    -Path "/api/agent/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"scenarioCode":"LECTURE_REGISTER_PEAK","question":"Analyze lecture registration peak risk","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "LECTURE_REGISTER_PEAK" -Actual $response.data.scenarioCode) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.apiCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.sessionId" -Threshold 0 -Actual $response.data.sessionId) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.reportId" -Threshold 0 -Actual $response.data.reportId) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.evidenceItems.Count" -Threshold 0 -Actual @($response.data.evidenceItems).Count) -and $ok
+        $ok = (Assert-NotBlank -Name $name -Endpoint $endpoint -Field "data.finalAnswer" -Actual $response.data.finalAnswer) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "agent run question matched auth 403" `
+    -Method "POST" `
+    -Path "/api/agent/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"question":"AUTH_LOGIN has many 403 signature token failures","startTime":"2026-06-19 00:00:00","endTime":"2026-06-19 23:59:59"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.scenarioCode" -Expected "AUTH_LOGIN_403_DIAG" -Actual $response.data.scenarioCode) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.apiCode" -Expected "AUTH_LOGIN" -Actual $response.data.apiCode) -and $ok
+        $ok = (Assert-NotBlank -Name $name -Endpoint $endpoint -Field "data.finalAnswer" -Actual $response.data.finalAnswer) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "agent run scenario not matched" `
+    -Method "POST" `
+    -Path "/api/agent/run" `
+    -Headers @{ "X-Demo-User-Id" = "1" } `
+    -Body '{"question":"general unrelated capacity review"}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "SCENARIO_NOT_MATCHED" -Actual $response.data.errorCode) -and $ok
+        return $ok
+    }
+
+$agentRunStreamName = "agent run stream lecture peak"
+$agentRunStreamEndpoint = "POST /api/agent/run/stream"
+try {
+    $agentRunStreamBody = [ordered]@{
+        scenarioCode = "LECTURE_REGISTER_PEAK"
+        question = "Stream lecture registration peak risk"
+        startTime = "2026-06-19 00:00:00"
+        endTime = "2026-06-19 23:59:59"
+    } | ConvertTo-Json -Compress
+    $agentRunStreamBodyFile = [System.IO.Path]::GetTempFileName()
+    Set-Content -LiteralPath $agentRunStreamBodyFile -Value $agentRunStreamBody -NoNewline -Encoding utf8
+    $agentRunStreamOutput = & curl.exe -s -N -X POST "$BaseUrl/api/agent/run/stream" `
+        -H "Content-Type: application/json" `
+        -H "X-Demo-User-Id: 1" `
+        --data-binary "@$agentRunStreamBodyFile"
+    Remove-Item -LiteralPath $agentRunStreamBodyFile -Force
+    $agentRunStreamText = $agentRunStreamOutput -join "`n"
+
+    $agentRunStreamOk = $true
+    foreach ($expectedEvent in @("agent_start", "tool_step", "evidence", "answer", "done")) {
+        if ($agentRunStreamText -notmatch "event:\s*$expectedEvent") {
+            Write-Fail -Name $agentRunStreamName -Endpoint $agentRunStreamEndpoint -Expected "SSE output contains event $expectedEvent" -Actual $agentRunStreamText
+            $agentRunStreamOk = $false
+            break
+        }
+    }
+
+    if ($agentRunStreamOk) {
+        Write-Host "[PASS] $agentRunStreamName" -ForegroundColor Green
+    }
+}
+catch {
+    Write-Fail -Name $agentRunStreamName -Endpoint $agentRunStreamEndpoint -Expected "reachable SSE response" -Actual $_.Exception.Message
+}
+
 if ($script:Failed -gt 0) {
     Write-Host "Smoke test failed: $script:Failed failure(s)." -ForegroundColor Red
     exit 1
