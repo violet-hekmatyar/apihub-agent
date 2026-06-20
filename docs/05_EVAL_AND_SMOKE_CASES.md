@@ -20,6 +20,9 @@ Current validation assets:
 
 - OpenAPI file: `docs/openapi/apihub-agent-api.yaml`
 - PowerShell smoke script: `scripts/check-backend-smoke.ps1`
+- External API scenario baseline: `docs/06_EXTERNAL_API_SCENARIOS.md`
+
+The external API scenario baseline defines which mocked business APIs are managed by API-HUB Agent. It is the foundation for later Tool and Agent evaluation, including Tool selection, evidence generation, and diagnostic answer quality.
 
 ## Backend Base Interface Checklist
 
@@ -94,3 +97,4 @@ Future smoke and evaluation cases can add:
 - Evidence List validation
 - Agent SSE streaming validation
 - RAG search validation
+- External API scenario evaluation based on `docs/06_EXTERNAL_API_SCENARIOS.md`

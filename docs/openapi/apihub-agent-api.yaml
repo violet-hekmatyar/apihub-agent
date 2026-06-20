@@ -73,9 +73,9 @@ paths:
                       tableCount: 17
                       keyTableRows:
                         sys_user: 5
-                        api_endpoint: 5
-                        api_call_stat_hourly: 11
-                        gateway_log: 8
+                        api_endpoint: 7
+                        api_call_stat_hourly: 15
+                        gateway_log: 14
                         agent_session: 4
                     traceId: trace_req_demo_db
         '400':
@@ -451,9 +451,9 @@ components:
             type: integer
           example:
             sys_user: 5
-            api_endpoint: 5
-            api_call_stat_hourly: 11
-            gateway_log: 8
+            api_endpoint: 7
+            api_call_stat_hourly: 15
+            gateway_log: 14
             agent_session: 4
     DemoUserResponse:
       type: object
