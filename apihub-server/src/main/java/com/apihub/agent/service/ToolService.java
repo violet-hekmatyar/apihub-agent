@@ -1471,6 +1471,7 @@ public class ToolService {
             metadata.put("status", alertStatus(row));
             metadata.put("alertType", row.get("event_type"));
             metadata.put("triggeredAt", formatTime(row.get("start_time")));
+            metadata.putAll(parseJsonMap(row.get("extra_info")));
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("evidenceType", "ALERT_EVENT");

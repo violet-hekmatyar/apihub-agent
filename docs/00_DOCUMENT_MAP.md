@@ -52,3 +52,7 @@ gateway_log -> api_call_stat_hourly
 ```
 
 在 Stats Aggregator v1 完成前，不建议优先扩展 LLM、前端、多 Agent、Milvus/RAG 或 Alert Evaluator。
+
+## Exception Source Audit Update
+
+- `10_EXCEPTION_SOURCE_AUDIT.md`: documents the confirmed sources of HTTP 409, HTTP 429, HIGH_FAILURE_RATE, and HIGH_RATE_LIMIT, including the boundary between controlled traffic injection and direct data fabrication.
