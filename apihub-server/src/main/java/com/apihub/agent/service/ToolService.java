@@ -25,6 +25,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -206,17 +207,18 @@ public class ToolService {
                         "startTime must be before or equal to endTime", context, spanId, started);
             }
 
+            LocalDateTime queryStartHour = startTime.truncatedTo(ChronoUnit.HOURS);
             List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                     """
                     SELECT id, stat_time, total_count, success_count, fail_count, error_4xx_count,
                            error_5xx_count, rate_limit_count, avg_latency_ms, p95_latency_ms,
                            p99_latency_ms, max_latency_ms
                     FROM api_call_stat_hourly
-                    WHERE api_id = ? AND stat_time >= ? AND stat_time <= ? AND status = 'ACTIVE'
+                    WHERE api_id = ? AND stat_time >= ? AND stat_time < ? AND status = 'ACTIVE'
                     ORDER BY stat_time ASC
                     """,
                     api.get("id"),
-                    Timestamp.valueOf(startTime),
+                    Timestamp.valueOf(queryStartHour),
                     Timestamp.valueOf(endTime)
             );
 
