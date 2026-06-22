@@ -817,6 +817,13 @@ public class ToolService {
             where.append(" AND a.severity = ?");
             params.add(request.getSeverity().trim().toUpperCase());
         }
+        if (request != null) {
+            String eventType = StringUtils.hasText(request.getAlertType()) ? request.getAlertType() : request.getEventType();
+            if (StringUtils.hasText(eventType)) {
+                where.append(" AND a.event_type = ?");
+                params.add(eventType.trim().toUpperCase());
+            }
+        }
         if (request != null && StringUtils.hasText(request.getStatus())) {
             String status = request.getStatus().trim().toUpperCase();
             if ("OPEN".equals(status) || "UNRESOLVED".equals(status)) {
@@ -1093,6 +1100,8 @@ public class ToolService {
         }
 
         Map<String, Object> filters = new LinkedHashMap<>();
+        filters.put("alertType", request == null ? null : request.getAlertType());
+        filters.put("eventType", request == null ? null : request.getEventType());
         filters.put("severity", request == null ? null : request.getSeverity());
         filters.put("status", request == null ? null : request.getStatus());
         filters.put("limit", request == null ? 20 : normalizeLimit(request.getLimit(), 20, 100));

@@ -5,6 +5,8 @@ public class QueryAlertEventsRequest {
     private String apiCode;
     private String startTime;
     private String endTime;
+    private String alertType;
+    private String eventType;
     private String severity;
     private String status;
     private Integer limit;
@@ -31,6 +33,22 @@ public class QueryAlertEventsRequest {
 
     public void setEndTime(String endTime) {
         this.endTime = endTime;
+    }
+
+    public String getAlertType() {
+        return alertType;
+    }
+
+    public void setAlertType(String alertType) {
+        this.alertType = alertType;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public void setEventType(String eventType) {
+        this.eventType = eventType;
     }
 
     public String getSeverity() {
