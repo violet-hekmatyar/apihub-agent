@@ -601,3 +601,25 @@ For Daily + Peak pilot validation, check the generated Agent report for:
 - The evidence chain should still retain individual 30-second alert windows; aggregation is presentation-only.
 
 A normal low-traffic control run is recommended as future work to demonstrate separation between normal and abnormal scenarios.
+
+## Normal Baseline Control Smoke
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-normal-baseline-control-smoke.ps1
+```
+
+Purpose:
+
+- Prove the system does not over-alert on low-traffic daily NORMAL requests.
+- Exercise the same factual chain as abnormal pilots: Gateway Invoke -> gateway_log -> Stats Aggregator -> Alert Evaluator -> Agent Diagnosis -> Report Workbench HTML/PDF.
+- Expected result: `riskLevel=NORMAL`, alert count `0`, reportId present, HTML report present, PDF present when Edge / Chrome headless export is available.
+
+Outputs are written under:
+
+```text
+D:\tmp\apihub-agent-normal-baseline-test\output\run-<timestamp>
+```
+
+The summary markdown records riskLevel, alert count, reportId, HTML path, PDF path, and raw JSON path.
