@@ -345,3 +345,69 @@ cancel marks a running run as CANCELLED
 ```
 
 For a five-minute peak run, `maxConcurrency` must cap concurrent Gateway Invoke workers while allowing the scheduler to keep dispatching by target RPS. `resultSummary.totalSentRequests`, the sums of API/status/phase distributions, and `latencySummary.count` should all equal `totalSentRequests`.
+
+---
+
+## Stats Aggregator v1 验收
+
+新增 smoke 脚本：
+
+```text
+scripts/check-stats-aggregator-smoke.ps1
+```
+
+默认运行方式：
+
+```powershell
+cd D:\apihub-agent-dev
+powershell -ExecutionPolicy Bypass -File .\scripts\check-stats-aggregator-smoke.ps1
+```
+
+指定服务地址：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-stats-aggregator-smoke.ps1 -BaseUrl http://localhost:8080 -MockProviderBaseUrl http://localhost:8090
+```
+
+该脚本验证链路：
+
+```text
+Scenario Runner
+-> Gateway Invoke
+-> gateway_log
+-> Stats Aggregator
+-> api_call_stat_hourly
+-> queryApiCallStats
+```
+
+当前边界：
+
+- 本阶段不生成 `alert_event`。
+- 本阶段不接入 LLM Agent。
+- 本阶段不验证前端工作台。
+- 本阶段只证明 `gateway_log` 可以聚合为 `api_call_stat_hourly`，且 `queryApiCallStats` 能查询新聚合统计。
+
+Stats Aggregator v1 开发态接口：
+
+```http
+POST /api/dev/stats/aggregate
+```
+
+示例请求：
+
+```json
+{
+  "startTime": "2026-06-22 10:00:00",
+  "endTime": "2026-06-22 11:00:00",
+  "scenarioRunId": "sr_20260622_demo",
+  "apiCode": "LECTURE_REGISTER",
+  "forceRebuild": true
+}
+```
+
+说明：
+
+- 聚合维度为 `api_id + stat_time` 小时桶。
+- 聚合事实源为 `gateway_log.request_time`，窗口条件为 `request_time >= startTime AND request_time < endTime`。
+- `scenarioRunId` 只用于 smoke 定位和响应统计，不作为 `api_call_stat_hourly` 写入维度，避免把全局小时统计覆盖成局部场景统计。
+- 重复执行同一窗口时，按聚合出来的 `api_id + stat_time` 删除旧统计后重建，避免统计翻倍。
