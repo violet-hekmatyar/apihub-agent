@@ -479,3 +479,55 @@ POST /api/dev/alerts/evaluate
 - 不接入 LLM Agent。
 - 不做 RAG、前端工作台或自动修复。
 - 不新增数据库表结构。
+---
+
+## Agent Diagnosis Evidence v1 验收
+
+新增 smoke 脚本：
+
+```text
+scripts/check-agent-diagnosis-evidence-smoke.ps1
+```
+
+默认运行方式：
+
+```powershell
+cd D:\apihub-agent-dev
+powershell -ExecutionPolicy Bypass -File .\scripts\check-agent-diagnosis-evidence-smoke.ps1
+```
+
+指定服务地址：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-agent-diagnosis-evidence-smoke.ps1 -BaseUrl http://localhost:8080 -MockProviderBaseUrl http://localhost:8090
+```
+
+该脚本验证链路：
+
+```text
+Scenario Runner
+-> Gateway Invoke
+-> gateway_log
+-> Stats Aggregator
+-> api_call_stat_hourly
+-> Alert Evaluator
+-> alert_event
+-> queryApiCallStats / queryAlertEvents / queryGatewayLogs
+-> Agent Diagnosis
+-> agent_report / evidence_item / tool_call_trace
+```
+
+新增开发态接口：
+
+```http
+POST /api/dev/agent/diagnose
+GET /api/dev/agent/reports/{reportId}
+```
+
+当前边界：
+
+- 本阶段只做确定性规则诊断，不接入真实 LLM / DashScope。
+- 本阶段不接入 Milvus、Embedding 或 RAG 向量检索。
+- 本阶段不验证前端工作台。
+- 本阶段不做多 Agent 编排、自动修复、自动通知或自动调参。
+- smoke 必须通过查询接口确认 report、evidence 和 tool trace 可见，不直接插入诊断报告数据。
