@@ -212,6 +212,16 @@ docs/apifox/reports/failed/
 
 ---
 
+## 当前交接前验证状态
+
+- backend smoke：已通过。
+- mock-provider smoke：已通过。
+- Apifox 30s Scenario Runner：已通过。
+- Gateway Invoke smoke 曾因非法 `X-Trace-Id` 失败，已修复 smoke 脚本为合法 32 位小写 hex。
+- 当前下一步验收重点是 Stats Aggregator v1。
+
+---
+
 ## 5. 后续新增验收项
 
 ### 5.1 Gateway Invoke 验收
