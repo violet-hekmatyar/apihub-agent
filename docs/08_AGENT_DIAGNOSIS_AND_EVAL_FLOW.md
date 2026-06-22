@@ -294,3 +294,42 @@ Scenario Runner 生成真实模拟调用
 ```text
 07_MOCK_PROVIDER_AND_TRAFFIC_SIMULATION.md
 ```
+---
+
+## Agent Diagnosis Evidence v1
+
+Agent Diagnosis Evidence v1 adds a dev-only deterministic diagnosis flow:
+
+```http
+POST /api/dev/agent/diagnose
+GET /api/dev/agent/reports/{reportId}
+```
+
+This stage does not call an LLM, Milvus, embeddings, RAG, frontend workflow, multi-agent orchestration, auto-fix, or notification system. It creates an explainable diagnosis report from existing API-HUB tools and persists the result for inspection.
+
+Evidence sources:
+
+- `queryApiInfo` from `api_endpoint` and related API metadata.
+- `queryApiCallStats` from `api_call_stat_hourly`.
+- `queryAlertEvents` from `alert_event`.
+- `queryGatewayLogs` from `gateway_log`.
+- `queryRateLimitRule` from rate-limit configuration.
+- `queryCampusEvents` from campus event context.
+- `queryApiDocs` from local API documentation records.
+
+Persistence:
+
+- `agent_report` stores the deterministic diagnosis summary, risk level, markdown content, tool-call count, and evidence count.
+- `evidence_item` stores merged evidence items with normalized evidence types such as `API_INFO`, `API_CALL_STAT`, `ALERT_EVENT`, `GATEWAY_LOG_SAMPLE`, `RATE_LIMIT_RULE`, `CAMPUS_EVENT`, and `API_DOC`.
+- `tool_call_trace` is written by `ToolService` for each reused tool call. The diagnosis service creates one diagnosis `agent_session` and passes the same `trace_id` and `session_id` through all tool calls.
+
+Rule mapping:
+
+- `HIGH_RATE_LIMIT` or rate-limit counts produce a `WARNING` or `CRITICAL` rate-limit diagnosis.
+- `HIGH_FAILURE_RATE` or `failRate >= 10%` produces an elevated failure-rate diagnosis.
+- `HIGH_LATENCY` or high P95 latency produces a latency diagnosis.
+- `HIGH_5XX` or elevated 5xx count produces a downstream/server-error diagnosis.
+- `AUTH_LOGIN` plus `AUTH_FAILURE_SPIKE` produces an authentication-failure diagnosis.
+- If no alert or threshold breach exists, the service still writes a normal deterministic report and records empty evidence markers for tools that returned no evidence.
+
+Next stages remain LLM-generated natural-language report refinement, RAG/Milvus evidence retrieval, and frontend report browsing.
