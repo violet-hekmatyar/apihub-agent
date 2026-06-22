@@ -1,0 +1,1 @@
+该用例验证讲座报名高峰场景下，Scenario Runner 能按负载配置生成混合流量，并通过 Gateway Invoke 写入调用事实、运行批次和样本调用，用于后续统计聚合与 Agent 诊断。
