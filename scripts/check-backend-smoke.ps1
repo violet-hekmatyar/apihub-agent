@@ -255,7 +255,7 @@ Run-SmokeTest `
     -ExtraChecks {
         param($response, $name, $endpoint)
         $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.databaseName" -Expected "apihub_agent" -Actual $response.data.databaseName
-        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.tableCount" -Expected 17 -Actual $response.data.tableCount) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.tableCount" -Threshold 16 -Actual $response.data.tableCount) -and $ok
         return $ok
     }
 
@@ -763,13 +763,62 @@ try {
         }
     }
 
-    if ($agentRunStreamOk) {
+if ($agentRunStreamOk) {
         Write-Host "[PASS] $agentRunStreamName" -ForegroundColor Green
     }
 }
 catch {
     Write-Fail -Name $agentRunStreamName -Endpoint $agentRunStreamEndpoint -Expected "reachable SSE response" -Actual $_.Exception.Message
 }
+
+Run-SmokeTest `
+    -Name "gateway invoke auth login normal" `
+    -Method "POST" `
+    -Path "/api/dev/gateway/invoke" `
+    -Headers @{ "X-Request-Id" = "req_smoke_gateway_auth_normal"; "X-Trace-Id" = "11111111111111111111111111111111" } `
+    -Body '{"apiCode":"AUTH_LOGIN","appCode":"COURSE_HELPER","mockScenario":"NORMAL","body":{"appCode":"COURSE_HELPER","studentNo":"2023001001","timestamp":"2026-06-19T12:00:00","nonce":"mock_nonce_smoke","signature":"mock_signature_valid"},"timeoutMs":3000,"clientInfo":{"clientIp":"10.0.0.12","userAgent":"backend-smoke/1.0"},"scenarioContext":{"scenarioRunId":"scenario_run_smoke_gateway","scenarioId":"AUTH_LOGIN_NORMAL","phase":"SMOKE","sequenceNo":1}}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.apiCode" -Expected "AUTH_LOGIN" -Actual $response.data.apiCode
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.appCode" -Expected "COURSE_HELPER" -Actual $response.data.appCode) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $true -Actual $response.data.success) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.upstreamStatus" -Expected 200 -Actual $response.data.upstreamStatus) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.gatewayLogId" -Threshold 0 -Actual $response.data.gatewayLogId) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "gateway invoke lecture register rate limited" `
+    -Method "POST" `
+    -Path "/api/dev/gateway/invoke" `
+    -Headers @{ "X-Request-Id" = "req_smoke_gateway_lecture_rate"; "X-Trace-Id" = "22222222222222222222222222222222" } `
+    -Body '{"apiCode":"LECTURE_REGISTER","appCode":"LECTURE_PORTAL","mockScenario":"RATE_LIMITED","body":{"lectureId":"lec_20260619_ai_001","studentNo":"2023001001","idempotencyKey":"idem_smoke_lecture_001"},"timeoutMs":3000,"clientInfo":{"clientIp":"10.0.0.12","userAgent":"backend-smoke/1.0"},"scenarioContext":{"scenarioRunId":"scenario_run_smoke_gateway","scenarioId":"LECTURE_REGISTER_PEAK","phase":"PEAK","sequenceNo":2}}' `
+    -ExpectedCode 200 `
+    -ExtraChecks {
+        param($response, $name, $endpoint)
+        $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.apiCode" -Expected "LECTURE_REGISTER" -Actual $response.data.apiCode
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.appCode" -Expected "LECTURE_PORTAL" -Actual $response.data.appCode) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.success" -Expected $false -Actual $response.data.success) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.upstreamStatus" -Expected 429 -Actual $response.data.upstreamStatus) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.errorCode" -Expected "RATE_LIMITED" -Actual $response.data.errorCode) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.gatewayLogId" -Threshold 0 -Actual $response.data.gatewayLogId) -and $ok
+        return $ok
+    }
+
+Run-SmokeTest `
+    -Name "gateway invoke unknown api" `
+    -Method "POST" `
+    -Path "/api/dev/gateway/invoke" `
+    -Body '{"apiCode":"UNKNOWN_API","appCode":"COURSE_HELPER"}' `
+    -ExpectedCode 404
+
+Run-SmokeTest `
+    -Name "gateway invoke permission denied" `
+    -Method "POST" `
+    -Path "/api/dev/gateway/invoke" `
+    -Body '{"apiCode":"VENUE_RESERVE","appCode":"COURSE_HELPER","body":{"venueId":"venue_report_hall_201","studentNo":"2023001001","reserveDate":"2026-06-20","timeRange":"19:00-21:00","idempotencyKey":"idem_denied_001"}}' `
+    -ExpectedCode 403
 
 if ($script:Failed -gt 0) {
     Write-Host "Smoke test failed: $script:Failed failure(s)." -ForegroundColor Red

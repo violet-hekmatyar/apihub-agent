@@ -4,23 +4,27 @@ info:
   version: 0.1.0
   description: |
     Standalone mock provider for external business APIs managed by API-HUB.
-    This is not an apihub-agent internal API and does not call Agent, Tool, LLM,
-    DashScope, Milvus, Embedding, or any database.
+    Single mock API endpoints remain lightweight and do not use a database.
+    Scenario Runner v1 uses MySQL only for run state and sampled-call persistence.
+    This service does not call Agent, Tool, LLM, DashScope, Milvus, or Embedding.
 servers:
   - url: http://localhost:8090
     description: Local mock provider
 tags:
   - name: Health
   - name: Mock APIs
+  - name: Scenario Runner
 components:
   parameters:
     XTraceId:
       name: X-Trace-Id
       in: header
       required: false
+      description: Optional trace id. If present it must be 32 lowercase hex characters; otherwise the server returns 400.
       schema:
         type: string
-      example: mock_trace_demo
+        pattern: '^[a-f0-9]{32}$'
+      example: 11111111111111111111111111111111
     XMockScenario:
       name: X-Mock-Scenario
       in: header
@@ -45,7 +49,7 @@ components:
           additionalProperties: true
         traceId:
           type: string
-          example: mock_trace_demo
+          example: 11111111111111111111111111111111
     AuthLoginRequest:
       type: object
       properties:
@@ -103,7 +107,172 @@ components:
         mockScenario:
           type: string
           example: NORMAL
+    ScenarioRunRequest:
+      type: object
+      properties:
+        scenarioId:
+          type: string
+          example: LECTURE_REGISTER_PEAK
+        targetGatewayBaseUrl:
+          type: string
+          example: http://localhost:8080
+        loadProfile:
+          type: object
+          properties:
+            logicalDurationSeconds:
+              type: integer
+              example: 10
+            timeScale:
+              type: number
+              example: 10
+            rampUpSeconds:
+              type: integer
+              example: 2
+            steadySeconds:
+              type: integer
+              example: 6
+            rampDownSeconds:
+              type: integer
+              example: 2
+            baseRps:
+              type: number
+              example: 1
+            peakRps:
+              type: number
+              example: 3
+            maxConcurrency:
+              type: integer
+              example: 3
+            randomSeed:
+              type: integer
+              format: int64
+              example: 20260619
+        sampleLimit:
+          type: integer
+          example: 5
+        note:
+          type: string
+          example: manual lecture peak test
 paths:
+  /mock-provider/scenario-runs:
+    post:
+      tags:
+        - Scenario Runner
+      summary: Start an asynchronous Scenario Runner run
+      description: Starts a small local-development traffic run. Every concrete call goes through apihub-server `/api/dev/gateway/invoke`; full facts are in `gateway_log`, run state is in `scenario_run`, and samples are in `scenario_call_sample`.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScenarioRunRequest'
+      responses:
+        '202':
+          description: Run accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+  /mock-provider/scenario-runs/{scenarioRunId}:
+    get:
+      tags:
+        - Scenario Runner
+      summary: Get Scenario Runner run status
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - name: scenarioRunId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current run status and counters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+        '400':
+          description: Invalid scenarioRunId format or invalid X-Trace-Id.
+        '404':
+          description: Scenario run not found.
+  /mock-provider/scenario-runs/{scenarioRunId}/result:
+    get:
+      tags:
+        - Scenario Runner
+      summary: Get Scenario Runner result summary
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - name: scenarioRunId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Result summary. If unfinished, returns current counters and partial sample summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+        '400':
+          description: Invalid scenarioRunId format or invalid X-Trace-Id.
+        '404':
+          description: Scenario run not found.
+  /mock-provider/scenario-runs/{scenarioRunId}/sample-calls:
+    get:
+      tags:
+        - Scenario Runner
+      summary: List sampled calls for a Scenario Runner run
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - name: scenarioRunId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Sampled calls ordered by sequence number.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+        '400':
+          description: Invalid scenarioRunId format or invalid X-Trace-Id.
+        '404':
+          description: Scenario run not found.
+  /mock-provider/scenario-runs/{scenarioRunId}/cancel:
+    post:
+      tags:
+        - Scenario Runner
+      summary: Cancel a running Scenario Runner run
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - name: scenarioRunId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current run status after cancel request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockResponse'
+        '400':
+          description: Invalid scenarioRunId format or invalid X-Trace-Id.
+        '404':
+          description: Scenario run not found.
   /mock-provider/health:
     get:
       tags:
@@ -128,7 +297,7 @@ paths:
                       status: UP
                       time: '2026-06-20 18:30:00'
                       javaVersion: '17'
-                    traceId: mock_trace_demo
+                    traceId: 11111111111111111111111111111111
   /mock-provider/auth/login:
     post:
       tags:
@@ -174,7 +343,7 @@ paths:
                       accessToken: mock_token_AUTH_LOGIN_001
                       expiresIn: 7200
                       tokenType: Bearer
-                    traceId: mock_trace_auth
+                    traceId: 11111111111111111111111111111111
         '401':
           description: TOKEN_EXPIRED.
           content:
@@ -187,7 +356,7 @@ paths:
                     code: 401
                     message: token expired
                     data: null
-                    traceId: mock_trace_auth_expired
+                    traceId: 11111111111111111111111111111111
         '403':
           description: Signature, timestamp, nonce, or app error.
           content:
@@ -200,7 +369,7 @@ paths:
                     code: 403
                     message: signature mismatch
                     data: null
-                    traceId: mock_trace_auth_denied
+                    traceId: 11111111111111111111111111111111
   /mock-provider/course/today:
     get:
       tags:
@@ -246,7 +415,7 @@ paths:
                           timeRange: '08:30-10:10'
                           room: Teaching Building A301
                           weekNo: 16
-                    traceId: mock_trace_course
+                    traceId: 11111111111111111111111111111111
                 cacheMiss:
                   value:
                     code: 200
@@ -255,7 +424,7 @@ paths:
                       studentNo: '2023001001'
                       cacheHit: false
                       scenarioHint: cache miss
-                    traceId: mock_trace_course_cache
+                    traceId: 11111111111111111111111111111111
         '504':
           description: COURSE_SYSTEM_TIMEOUT.
           content:
@@ -268,7 +437,7 @@ paths:
                     code: 504
                     message: course system timeout
                     data: null
-                    traceId: mock_trace_course_timeout
+                    traceId: 11111111111111111111111111111111
   /mock-provider/lecture/list:
     get:
       tags:
@@ -309,7 +478,7 @@ paths:
                           quota: 120
                           registeredCount: 86
                           registerStatus: OPEN
-                    traceId: mock_trace_lecture_list
+                    traceId: 11111111111111111111111111111111
         '503':
           description: SERVICE_BUSY.
           content:
@@ -322,7 +491,7 @@ paths:
                     code: 503
                     message: lecture service busy
                     data: null
-                    traceId: mock_trace_lecture_busy
+                    traceId: 11111111111111111111111111111111
   /mock-provider/lecture/register:
     post:
       tags:
@@ -366,7 +535,7 @@ paths:
                       studentNo: '2023001001'
                       registerStatus: SUCCESS
                       ticketNo: ticket_mock_001
-                    traceId: mock_trace_lecture_register
+                    traceId: 11111111111111111111111111111111
         '400':
           description: IDEMPOTENCY_KEY_MISSING.
         '409':
@@ -383,7 +552,7 @@ paths:
                     code: 429
                     message: too many requests
                     data: null
-                    traceId: mock_trace_lecture_rate
+                    traceId: 11111111111111111111111111111111
         '503':
           description: SERVICE_BUSY.
   /mock-provider/notice/list:
@@ -424,7 +593,7 @@ paths:
                           title: Final Exam Schedule Notice
                           publishTime: '2026-06-19 09:00:00'
                           publisher: Academic Affairs Office
-                    traceId: mock_trace_notice
+                    traceId: 11111111111111111111111111111111
         '503':
           description: SERVICE_BUSY.
   /mock-provider/venue/reserve:
@@ -473,7 +642,7 @@ paths:
                       venueId: venue_report_hall_201
                       reserveStatus: SUCCESS
                       reserveNo: reserve_mock_001
-                    traceId: mock_trace_venue
+                    traceId: 11111111111111111111111111111111
         '400':
           description: IDEMPOTENCY_KEY_MISSING.
         '409':
@@ -488,7 +657,7 @@ paths:
                     code: 409
                     message: reservation conflict
                     data: null
-                    traceId: mock_trace_venue_conflict
+                    traceId: 11111111111111111111111111111111
         '429':
           description: RATE_LIMITED.
   /mock-provider/library/borrow:
@@ -528,7 +697,7 @@ paths:
                           borrowDate: '2026-06-01'
                           dueDate: '2026-07-01'
                           status: BORROWED
-                    traceId: mock_trace_library
+                    traceId: 11111111111111111111111111111111
         '500':
           description: SERVICE_ERROR.
         '503':
@@ -545,4 +714,4 @@ paths:
                     code: 504
                     message: library downstream timeout
                     data: null
-                    traceId: mock_trace_library_timeout
+                    traceId: 11111111111111111111111111111111

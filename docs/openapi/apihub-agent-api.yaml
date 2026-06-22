@@ -21,6 +21,8 @@ tags:
     description: Dev-only deterministic Tool Chain Eval APIs.
   - name: Agent Run
     description: Deterministic Agent Run and SSE skeleton APIs.
+  - name: Dev Gateway
+    description: Dev-only Gateway Invoke API for calling mock-provider and writing gateway_log.
 paths:
   /api/health:
     get:
@@ -1160,6 +1162,126 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/dev/gateway/invoke:
+    post:
+      tags:
+        - Dev Gateway
+      summary: Dev-only Gateway Invoke v1
+      description: |
+        Calls one mock-provider external API by apiCode, validates appCode authorization,
+        writes one gateway_log row, and returns a flattened upstream summary. This endpoint
+        is for local development and Scenario Runner integration; it is not a production gateway.
+      parameters:
+        - $ref: '#/components/parameters/XTraceId'
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GatewayInvokeRequest'
+            examples:
+              lectureRegisterNormal:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  appCode: LECTURE_PORTAL
+                  mockScenario: NORMAL
+                  body:
+                    lectureId: lec_20260619_ai_001
+                    studentNo: '2023001001'
+                    idempotencyKey: idem_lecture_001
+                  timeoutMs: 3000
+              lectureRegisterRateLimited:
+                value:
+                  apiCode: LECTURE_REGISTER
+                  appCode: LECTURE_PORTAL
+                  mockScenario: RATE_LIMITED
+                  body:
+                    lectureId: lec_20260619_ai_001
+                    studentNo: '2023001001'
+                    idempotencyKey: idem_lecture_001
+                  scenarioContext:
+                    scenarioRunId: scenario_run_demo_001
+                    scenarioId: LECTURE_REGISTER_PEAK
+                    phase: PEAK
+                    sequenceNo: 1
+              permissionDenied:
+                value:
+                  apiCode: VENUE_RESERVE
+                  appCode: COURSE_HELPER
+                  body:
+                    venueId: venue_report_hall_201
+                    studentNo: '2023001001'
+                    reserveDate: '2026-06-20'
+                    timeRange: '19:00-21:00'
+                    idempotencyKey: idem_denied_001
+      responses:
+        '200':
+          description: Gateway Invoke result wrapped by the unified API response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseGatewayInvokeResult'
+              examples:
+                normal:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      apiCode: LECTURE_REGISTER
+                      appCode: LECTURE_PORTAL
+                      mockScenario: NORMAL
+                      success: true
+                      upstreamStatus: 200
+                      upstreamCode: 200
+                      upstreamMessage: success
+                      errorCode: null
+                      latencyMs: 52
+                      gatewayLogId: 12345
+                      upstreamData:
+                        lectureId: lec_20260619_ai_001
+                        studentNo: '2023001001'
+                        registerStatus: SUCCESS
+                        ticketNo: ticket_mock_001
+                      traceId: 0af7651916cd43dd8448eb211c80319c
+                      requestId: req_demo_gateway
+                    traceId: 0af7651916cd43dd8448eb211c80319c
+                upstreamRateLimited:
+                  value:
+                    code: 200
+                    message: success
+                    data:
+                      apiCode: LECTURE_REGISTER
+                      appCode: LECTURE_PORTAL
+                      mockScenario: RATE_LIMITED
+                      success: false
+                      upstreamStatus: 429
+                      upstreamCode: 429
+                      upstreamMessage: too many requests
+                      errorCode: RATE_LIMITED
+                      latencyMs: 86
+                      gatewayLogId: 12346
+                      upstreamData: null
+                      traceId: 0af7651916cd43dd8448eb211c80319c
+                      requestId: req_demo_gateway
+                    traceId: 0af7651916cd43dd8448eb211c80319c
+        '403':
+          description: Business permission denied example. Current implementation returns a JSON body with code=403.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+              examples:
+                permissionDenied:
+                  value:
+                    code: 403
+                    message: 'appCode is not authorized to call apiCode: COURSE_HELPER -> VENUE_RESERVE'
+                    data: null
+                    traceId: trace_req_demo_gateway_denied
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/agent/run:
     post:
       tags:
@@ -1852,6 +1974,113 @@ components:
           type: integer
         keyData:
           type: object
+    GatewayInvokeRequest:
+      type: object
+      required:
+        - apiCode
+      properties:
+        apiCode:
+          type: string
+          example: LECTURE_REGISTER
+        appCode:
+          type: string
+          description: Optional. Defaults by apiCode when omitted.
+          example: LECTURE_PORTAL
+        mockScenario:
+          type: string
+          default: NORMAL
+          example: RATE_LIMITED
+        queryParams:
+          type: object
+          additionalProperties: true
+          example: {}
+        body:
+          type: object
+          additionalProperties: true
+          example:
+            lectureId: lec_20260619_ai_001
+            studentNo: '2023001001'
+            idempotencyKey: idem_lecture_001
+        timeoutMs:
+          type: integer
+          default: 3000
+          example: 3000
+        clientInfo:
+          type: object
+          properties:
+            clientIp:
+              type: string
+              example: 10.0.0.12
+            userAgent:
+              type: string
+              example: scenario-runner/1.0
+        scenarioContext:
+          type: object
+          properties:
+            scenarioRunId:
+              type: string
+              example: scenario_run_demo_001
+            scenarioId:
+              type: string
+              example: LECTURE_REGISTER_PEAK
+            scenarioKey:
+              type: string
+              example: lecture-register-peak
+            phase:
+              type: string
+              example: PEAK
+            sequenceNo:
+              type: integer
+              example: 1
+    ApiResponseGatewayInvokeResult:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/GatewayInvokeResult'
+        traceId:
+          type: string
+          example: 0af7651916cd43dd8448eb211c80319c
+    GatewayInvokeResult:
+      type: object
+      properties:
+        apiCode:
+          type: string
+        appCode:
+          type: string
+        mockScenario:
+          type: string
+        success:
+          type: boolean
+        upstreamStatus:
+          type: integer
+        upstreamCode:
+          type: integer
+          nullable: true
+        upstreamMessage:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        latencyMs:
+          type: integer
+          format: int64
+        gatewayLogId:
+          type: integer
+          format: int64
+        upstreamData:
+          nullable: true
+          description: Mock-provider data field when available.
+        traceId:
+          type: string
+        requestId:
+          type: string
     AgentRunRequest:
       type: object
       properties:

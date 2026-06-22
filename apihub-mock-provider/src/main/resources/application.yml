@@ -4,3 +4,12 @@ server:
 spring:
   application:
     name: apihub-mock-provider
+  datasource:
+    url: ${APIHUB_DB_URL:jdbc:mysql://localhost:3306/apihub_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${APIHUB_DB_USERNAME:root}
+    password: ${APIHUB_DB_PASSWORD:${MYSQL_ROOT_PASSWORD:123456}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+apihub:
+  gateway:
+    base-url: ${APIHUB_GATEWAY_BASE_URL:http://localhost:8080}
