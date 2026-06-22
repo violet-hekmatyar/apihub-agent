@@ -531,3 +531,62 @@ GET /api/dev/agent/reports/{reportId}
 - 本阶段不验证前端工作台。
 - 本阶段不做多 Agent 编排、自动修复、自动通知或自动调参。
 - smoke 必须通过查询接口确认 report、evidence 和 tool trace 可见，不直接插入诊断报告数据。
+---
+
+## Agent Report Workbench v1 验收
+
+新增 smoke 脚本：
+
+```text
+scripts/check-agent-report-workbench-smoke.ps1
+```
+
+默认运行方式：
+
+```powershell
+cd D:\apihub-agent-dev
+powershell -ExecutionPolicy Bypass -File .\scripts\check-agent-report-workbench-smoke.ps1
+```
+
+指定服务地址：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-agent-report-workbench-smoke.ps1 -BaseUrl http://localhost:8080 -MockProviderBaseUrl http://localhost:8090
+```
+
+该脚本验证接口：
+
+```http
+GET /api/dev/agent/reports
+GET /api/dev/agent/reports/{reportId}
+GET /api/dev/agent/reports/{reportId}/html
+```
+
+验证链路：
+
+```text
+Agent Diagnosis
+-> agent_report
+-> evidence_item
+-> tool_call_trace
+-> report list
+-> report detail
+-> HTML report
+-> Edge / Chrome print to PDF ready
+```
+
+PDF 导出说明：
+
+1. 打开 `GET /api/dev/agent/reports/{reportId}/html`。
+2. 使用 Microsoft Edge 或 Chrome。
+3. 按 `Ctrl + P`。
+4. 打印机选择“另存为 PDF”。
+5. 纸张选择 A4。
+6. 保存。
+
+当前边界：
+
+- 本阶段不直接生成 PDF 文件。
+- 本阶段不开发完整 Vue / React 前端。
+- 本阶段不接入 LLM / DashScope。
+- 本阶段不接入 Milvus / Embedding / RAG。

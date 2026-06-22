@@ -16,6 +16,8 @@ import com.apihub.agent.model.tool.ToolResult;
 import com.apihub.agent.model.vo.AgentDiagnoseResponseVO;
 import com.apihub.agent.model.vo.AgentEvidenceItemVO;
 import com.apihub.agent.model.vo.AgentReportDetailVO;
+import com.apihub.agent.model.vo.AgentReportListItemVO;
+import com.apihub.agent.model.vo.AgentReportListVO;
 import com.apihub.agent.service.ToolService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -162,6 +164,172 @@ public class AgentDiagnosisEvidenceService {
                 String.valueOf(report.get("trace_id"))
         ));
         return detail;
+    }
+
+    public AgentReportListVO listReports(String apiCode, String riskLevel, String status,
+                                         String startTime, String endTime, String keyword,
+                                         Integer pageNo, Integer pageSize) {
+        int actualPageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
+        int actualPageSize = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 100);
+        int offset = (actualPageNo - 1) * actualPageSize;
+
+        List<Object> params = new ArrayList<>();
+        StringBuilder where = new StringBuilder(" WHERE r.report_type = 'DIAGNOSIS'");
+        if (StringUtils.hasText(apiCode)) {
+            where.append(" AND JSON_UNQUOTE(JSON_EXTRACT(r.extra_info, '$.apiCode')) = ?");
+            params.add(normalizeApiCode(apiCode));
+        }
+        if (StringUtils.hasText(riskLevel)) {
+            where.append(" AND r.risk_level = ?");
+            params.add(riskLevel.trim().toUpperCase(Locale.ROOT));
+        }
+        if (StringUtils.hasText(status)) {
+            where.append(" AND r.status = ?");
+            params.add(status.trim().toUpperCase(Locale.ROOT));
+        }
+        if (StringUtils.hasText(startTime)) {
+            where.append(" AND r.generated_at >= ?");
+            params.add(Timestamp.valueOf(parseRequiredTime(startTime, "startTime")));
+        }
+        if (StringUtils.hasText(endTime)) {
+            where.append(" AND r.generated_at <= ?");
+            params.add(Timestamp.valueOf(parseRequiredTime(endTime, "endTime")));
+        }
+        if (StringUtils.hasText(keyword)) {
+            String like = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
+            where.append(" AND (LOWER(r.title) LIKE ? OR LOWER(r.summary) LIKE ? OR LOWER(r.content_md) LIKE ? OR LOWER(COALESCE(r.remark, '')) LIKE ?)");
+            params.add(like);
+            params.add(like);
+            params.add(like);
+            params.add(like);
+        }
+
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM agent_report r" + where,
+                Long.class,
+                params.toArray()
+        );
+        List<Object> pageParams = new ArrayList<>(params);
+        pageParams.add(actualPageSize);
+        pageParams.add(offset);
+        List<AgentReportListItemVO> items = jdbcTemplate.query(
+                """
+                SELECT r.id, r.report_code, r.title, r.summary, r.risk_level, r.status,
+                       r.evidence_count, r.tool_call_count, r.generated_at, r.created_at,
+                       r.extra_info
+                FROM agent_report r
+                """ + where + " ORDER BY r.generated_at DESC, r.id DESC LIMIT ? OFFSET ?",
+                (rs, rowNum) -> {
+                    Map<String, Object> extraInfo = parseJsonMap(rs.getString("extra_info"));
+                    String itemApiCode = stringValue(extraInfo.get("apiCode"));
+                    AgentReportListItemVO item = new AgentReportListItemVO();
+                    item.setReportId(rs.getLong("id"));
+                    item.setReportCode(rs.getString("report_code"));
+                    item.setApiCode(itemApiCode);
+                    item.setApiName(findApiNameByCode(itemApiCode));
+                    item.setRiskLevel(rs.getString("risk_level"));
+                    item.setStatus(reportDisplayStatus(rs.getString("status")));
+                    item.setSummary(rs.getString("summary"));
+                    item.setStartTime(stringValue(extraInfo.get("startTime")));
+                    item.setEndTime(stringValue(extraInfo.get("endTime")));
+                    item.setScenarioRunId(stringValue(extraInfo.get("scenarioRunId")));
+                    item.setEvidenceCount(rs.getInt("evidence_count"));
+                    item.setToolCallCount(rs.getInt("tool_call_count"));
+                    item.setCreatedAt(formatTime(rs.getTimestamp("created_at")));
+                    item.setGeneratedAt(formatTime(rs.getTimestamp("generated_at")));
+                    return item;
+                },
+                pageParams.toArray()
+        );
+
+        AgentReportListVO result = new AgentReportListVO();
+        result.setPageNo(actualPageNo);
+        result.setPageSize(actualPageSize);
+        result.setTotal(total == null ? 0L : total);
+        result.setItems(items);
+        return result;
+    }
+
+    public String renderReportHtml(Long reportId) {
+        AgentReportDetailVO detail = getReport(reportId);
+        Map<String, Object> report = detail.getReport();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> extraInfo = report.get("extraInfo") instanceof Map<?, ?> map
+                ? (Map<String, Object>) map
+                : Map.of();
+        String riskLevel = stringValue(report.get("riskLevel"));
+        String riskClass = riskLevel.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "-");
+        String apiCode = display(firstNonBlank(stringValue(report.get("apiCode")), stringValue(extraInfo.get("apiCode"))));
+        String apiName = display(firstNonBlank(stringValue(report.get("apiName")), findApiNameByCode(apiCode)));
+
+        StringBuilder html = new StringBuilder();
+        html.append("<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\">")
+                .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+                .append("<title>API-HUB Agent 诊断报告 #").append(escapeHtml(report.get("reportId"))).append("</title>")
+                .append("<style>")
+                .append("body{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Microsoft YaHei\",Arial,sans-serif;color:#172033;margin:0;background:#f5f7fb;line-height:1.55}")
+                .append(".page{max-width:1080px;margin:0 auto;padding:32px 28px 48px;background:#fff;min-height:100vh}")
+                .append(".top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #172033;padding-bottom:18px;margin-bottom:22px}")
+                .append("h1{font-size:28px;margin:0 0 8px}h2{font-size:18px;margin:0 0 12px}.muted{color:#687386;font-size:13px}")
+                .append(".badge{display:inline-block;border-radius:999px;padding:6px 12px;font-weight:700;background:#e7edf7;color:#1d3557}.badge.warning{background:#fff1d6;color:#8a5700}.badge.critical{background:#ffe1e1;color:#9c1c1c}.badge.normal{background:#e7f7ed;color:#176b3a}")
+                .append(".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.card{border:1px solid #d9e0ea;border-radius:8px;padding:12px;background:#fbfcff}.label{font-size:12px;color:#687386}.value{font-weight:700;margin-top:4px;word-break:break-word}")
+                .append(".section{margin-top:24px;border-top:1px solid #d9e0ea;padding-top:18px;break-inside:avoid}.diagnosis{display:grid;grid-template-columns:1fr;gap:10px}.box{border-left:4px solid #2f5fbb;background:#f6f8fc;padding:12px;border-radius:6px}")
+                .append("table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #d9e0ea;padding:8px;vertical-align:top;text-align:left}th{background:#eef3fb}tr{page-break-inside:avoid}.small{font-size:12px;color:#4e5a6b}.footer{margin-top:28px;border-top:1px solid #d9e0ea;padding-top:14px;color:#687386;font-size:12px}")
+                .append("@page{size:A4;margin:14mm}@media print{body{background:#fff}.page{max-width:none;padding:0;min-height:auto}.section{break-inside:avoid}.no-print{display:none}.card{background:#fff}.top{break-inside:avoid}}")
+                .append("</style></head><body><main class=\"page\">");
+
+        html.append("<div class=\"top\"><div><h1>API-HUB Agent 诊断报告</h1><div class=\"muted\">Report ID: ")
+                .append(escapeHtml(report.get("reportId"))).append(" / ")
+                .append(escapeHtml(report.get("reportCode"))).append("</div></div><div><span class=\"badge ")
+                .append(escapeHtml(riskClass)).append("\">").append(escapeHtml(display(riskLevel))).append("</span></div></div>");
+
+        html.append("<section class=\"grid\">")
+                .append(card("API 编码", apiCode))
+                .append(card("API 名称", apiName))
+                .append(card("诊断状态", display(report.get("status"))))
+                .append(card("时间窗口", display(firstNonBlank(stringValue(report.get("startTime")), stringValue(extraInfo.get("startTime")))) + " ~ " + display(firstNonBlank(stringValue(report.get("endTime")), stringValue(extraInfo.get("endTime"))))))
+                .append(card("Scenario RunId", display(firstNonBlank(stringValue(report.get("scenarioRunId")), stringValue(extraInfo.get("scenarioRunId"))))))
+                .append(card("生成时间", display(report.get("generatedAt"))))
+                .append(card("证据数量", display(report.get("evidenceCount"))))
+                .append(card("工具调用数量", display(report.get("toolCallCount"))))
+                .append(card("诊断模式", display(firstNonBlank(stringValue(report.get("diagnosisMode")), stringValue(extraInfo.get("diagnosisMode"))))))
+                .append("</section>");
+
+        html.append("<section class=\"section\"><h2>诊断结论</h2><div class=\"diagnosis\">")
+                .append(box("问题摘要", display(report.get("summary"))))
+                .append(box("可能原因", display(report.get("rootCause"))))
+                .append(box("处理建议", display(report.get("recommendation"))))
+                .append("</div></section>");
+
+        html.append("<section class=\"section\"><h2>指标 / 告警摘要</h2>")
+                .append(metricSummary(detail.getEvidenceItems()))
+                .append("</section>");
+
+        html.append("<section class=\"section\"><h2>证据链</h2><table><thead><tr><th>类型</th><th>来源工具</th><th>标题</th><th>内容摘要</th><th>引用</th></tr></thead><tbody>");
+        for (AgentEvidenceItemVO item : detail.getEvidenceItems()) {
+            html.append("<tr><td>").append(escapeHtml(display(item.getEvidenceType()))).append("</td><td>")
+                    .append(escapeHtml(display(item.getSourceTool()))).append("</td><td>")
+                    .append(escapeHtml(display(item.getTitle()))).append("</td><td>")
+                    .append(escapeHtml(display(item.getContent()))).append("</td><td>")
+                    .append(escapeHtml(display(item.getSourceRef()))).append("</td></tr>");
+        }
+        html.append("</tbody></table></section>");
+
+        html.append("<section class=\"section\"><h2>工具调用轨迹</h2><table><thead><tr><th>工具</th><th>成功</th><th>耗时</th><th>创建时间</th><th>请求摘要</th><th>响应摘要</th></tr></thead><tbody>");
+        for (Map<String, Object> trace : detail.getToolCallTraces()) {
+            html.append("<tr><td>").append(escapeHtml(display(trace.get("toolName")))).append("</td><td>")
+                    .append(escapeHtml(display(trace.get("success")))).append("</td><td>")
+                    .append(escapeHtml(display(trace.get("latencyMs")))).append(" ms</td><td>")
+                    .append(escapeHtml(display(trace.get("createdAt")))).append("</td><td>")
+                    .append(escapeHtml(display(trace.get("requestSummary")))).append("</td><td>")
+                    .append(escapeHtml(display(trace.get("responseSummary")))).append("</td></tr>");
+        }
+        html.append("</tbody></table></section>");
+
+        html.append("<footer class=\"footer\">Generated by API-HUB Agent Report Workbench v1. ")
+                .append("PDF 导出提示：建议使用 Microsoft Edge / Chrome 打开本 HTML，按 Ctrl + P，打印机选择“另存为 PDF”，纸张选择 A4 后保存。</footer>")
+                .append("</main></body></html>");
+        return html.toString();
     }
 
     private List<ToolResult> runTools(String apiCode, LocalDateTime startTime, LocalDateTime endTime, ToolContext context) {
@@ -509,7 +677,7 @@ public class AgentDiagnosisEvidenceService {
         return jdbcTemplate.query(
                 """
                 SELECT id, session_id, trace_id, span_id, tool_name, tool_type, latency_ms,
-                       success, error_code, error_message, status, created_at
+                       success, error_code, error_message, status, input_json, output_json, created_at
                 FROM tool_call_trace
                 WHERE session_id = ? AND trace_id = ?
                 ORDER BY id ASC
@@ -527,6 +695,8 @@ public class AgentDiagnosisEvidenceService {
                     row.put("errorCode", rs.getString("error_code"));
                     row.put("errorMessage", rs.getString("error_message"));
                     row.put("status", rs.getString("status"));
+                    row.put("requestSummary", summarizeJson(rs.getString("input_json"), 180));
+                    row.put("responseSummary", summarizeJson(rs.getString("output_json"), 220));
                     row.put("createdAt", formatTime(rs.getTimestamp("created_at")));
                     return row;
                 },
@@ -536,23 +706,35 @@ public class AgentDiagnosisEvidenceService {
     }
 
     private Map<String, Object> toReportMap(Map<String, Object> row) {
+        Map<String, Object> extraInfo = parseJsonMap(stringValue(row.get("extra_info")));
+        String apiCode = stringValue(extraInfo.get("apiCode"));
+        String contentMd = stringValue(row.get("content_md"));
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("reportId", row.get("id"));
         report.put("reportCode", row.get("report_code"));
         report.put("sessionId", row.get("session_id"));
         report.put("traceId", row.get("trace_id"));
         report.put("reportType", row.get("report_type"));
+        report.put("apiCode", apiCode);
+        report.put("apiName", findApiNameByCode(apiCode));
         report.put("title", row.get("title"));
         report.put("summary", row.get("summary"));
+        report.put("rootCause", extractMarkdownSection(contentMd, "Root Cause"));
+        report.put("recommendation", extractMarkdownSection(contentMd, "Recommendation"));
         report.put("riskLevel", row.get("risk_level"));
         report.put("contentMd", row.get("content_md"));
         report.put("createdBy", row.get("created_by"));
         report.put("evidenceCount", row.get("evidence_count"));
         report.put("toolCallCount", row.get("tool_call_count"));
         report.put("durationMs", row.get("duration_ms"));
-        report.put("status", row.get("status"));
+        report.put("status", reportDisplayStatus(stringValue(row.get("status"))));
+        report.put("startTime", extraInfo.get("startTime"));
+        report.put("endTime", extraInfo.get("endTime"));
+        report.put("scenarioRunId", extraInfo.get("scenarioRunId"));
+        report.put("diagnosisMode", extraInfo.get("diagnosisMode"));
+        report.put("createdAt", formatTime(row.get("created_at")));
         report.put("generatedAt", formatTime(row.get("generated_at")));
-        report.put("extraInfo", parseJsonMap(stringValue(row.get("extra_info"))));
+        report.put("extraInfo", extraInfo);
         return report;
     }
 
@@ -710,6 +892,124 @@ public class AgentDiagnosisEvidenceService {
     private String findApiName(List<ToolResult> toolResults) {
         Object name = dataOf(toolResults, "queryApiInfo").get("apiName");
         return stringValue(name);
+    }
+
+    private String findApiNameByCode(String apiCode) {
+        if (!StringUtils.hasText(apiCode)) {
+            return "";
+        }
+        try {
+            return jdbcTemplate.queryForObject(
+                    "SELECT api_name FROM api_endpoint WHERE api_code = ? LIMIT 1",
+                    String.class,
+                    apiCode
+            );
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private String reportDisplayStatus(String status) {
+        if ("SUCCESS".equals(status)) {
+            return "COMPLETED";
+        }
+        return StringUtils.hasText(status) ? status : "UNKNOWN";
+    }
+
+    private String extractMarkdownSection(String markdown, String heading) {
+        if (!StringUtils.hasText(markdown)) {
+            return "";
+        }
+        String marker = "## " + heading;
+        int start = markdown.indexOf(marker);
+        if (start < 0) {
+            return "";
+        }
+        int contentStart = start + marker.length();
+        int next = markdown.indexOf("\n## ", contentStart);
+        String section = next < 0 ? markdown.substring(contentStart) : markdown.substring(contentStart, next);
+        return section.trim();
+    }
+
+    private String summarizeJson(String json, int maxLength) {
+        if (!StringUtils.hasText(json)) {
+            return "N/A";
+        }
+        try {
+            Object parsed = objectMapper.readValue(json, Object.class);
+            String compact = objectMapper.writeValueAsString(parsed);
+            return truncate(compact, maxLength);
+        } catch (Exception e) {
+            return truncate(json, maxLength);
+        }
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return StringUtils.hasText(first) ? first : second;
+    }
+
+    private String display(Object value) {
+        String text = stringValue(value);
+        return StringUtils.hasText(text) ? text : "N/A";
+    }
+
+    private String card(String label, String value) {
+        return "<div class=\"card\"><div class=\"label\">" + escapeHtml(label)
+                + "</div><div class=\"value\">" + escapeHtml(display(value)) + "</div></div>";
+    }
+
+    private String box(String title, String content) {
+        return "<div class=\"box\"><strong>" + escapeHtml(title) + "</strong><br>"
+                + escapeHtml(display(content)) + "</div>";
+    }
+
+    private String metricSummary(List<AgentEvidenceItemVO> evidenceItems) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("<table><thead><tr><th>类型</th><th>标题</th><th>关键内容</th></tr></thead><tbody>");
+        int count = 0;
+        for (AgentEvidenceItemVO item : evidenceItems) {
+            if (!"API_CALL_STAT".equals(item.getEvidenceType()) && !"ALERT_EVENT".equals(item.getEvidenceType())) {
+                continue;
+            }
+            builder.append("<tr><td>").append(escapeHtml(display(item.getEvidenceType()))).append("</td><td>")
+                    .append(escapeHtml(display(item.getTitle()))).append("</td><td>")
+                    .append(escapeHtml(display(metricContent(item)))).append("</td></tr>");
+            count++;
+        }
+        if (count == 0) {
+            builder.append("<tr><td colspan=\"3\">暂无指标或告警摘要</td></tr>");
+        }
+        builder.append("</tbody></table>");
+        return builder.toString();
+    }
+
+    private String metricContent(AgentEvidenceItemVO item) {
+        Map<String, Object> extra = item.getExtraInfo();
+        Object metadata = extra.get("metadata");
+        if (metadata instanceof Map<?, ?> map) {
+            List<String> parts = new ArrayList<>();
+            for (String key : List.of("alertType", "severity", "status", "totalCallCount", "failRate",
+                    "rateLimitCount", "p95LatencyMs", "p99LatencyMs")) {
+                Object value = map.get(key);
+                if (value != null) {
+                    parts.add(key + "=" + value);
+                }
+            }
+            if (!parts.isEmpty()) {
+                return String.join(", ", parts);
+            }
+        }
+        return item.getContent();
+    }
+
+    private String escapeHtml(Object value) {
+        String text = stringValue(value);
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 
     private String criticalIf(String highestSeverity, double failRate, int maxP95, String fallback) {
