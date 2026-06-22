@@ -590,3 +590,14 @@ PDF 导出说明：
 - 本阶段不开发完整 Vue / React 前端。
 - 本阶段不接入 LLM / DashScope。
 - 本阶段不接入 Milvus / Embedding / RAG。
+
+## Pilot Report Quality Checklist
+
+For Daily + Peak pilot validation, check the generated Agent report for:
+
+- API_CALL_STAT evidence should be present when hourly stats exist. Short diagnosis windows may query an expanded hour-aligned bucket window.
+- The HTML metric / alert summary should aggregate repeated 30-second HIGH_FAILURE_RATE and HIGH_RATE_LIMIT windows instead of listing duplicate rows at the top.
+- The HTML report should include a "测试场景与异常来源说明" section clarifying controlled traffic injection, Mock Provider / Gateway Invoke / gateway_log / Stats Aggregator / Alert Evaluator provenance, and the simulated development-environment boundary.
+- The evidence chain should still retain individual 30-second alert windows; aggregation is presentation-only.
+
+A normal low-traffic control run is recommended as future work to demonstrate separation between normal and abnormal scenarios.

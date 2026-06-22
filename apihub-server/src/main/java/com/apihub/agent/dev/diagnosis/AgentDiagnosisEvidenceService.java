@@ -37,6 +37,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -274,7 +275,7 @@ public class AgentDiagnosisEvidenceService {
                 .append(".badge{display:inline-block;border-radius:999px;padding:6px 12px;font-weight:700;background:#e7edf7;color:#1d3557}.badge.warning{background:#fff1d6;color:#8a5700}.badge.critical{background:#ffe1e1;color:#9c1c1c}.badge.normal{background:#e7f7ed;color:#176b3a}")
                 .append(".grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.card{border:1px solid #d9e0ea;border-radius:8px;padding:12px;background:#fbfcff}.label{font-size:12px;color:#687386}.value{font-weight:700;margin-top:4px;word-break:break-word}")
                 .append(".section{margin-top:24px;border-top:1px solid #d9e0ea;padding-top:18px;break-inside:avoid}.diagnosis{display:grid;grid-template-columns:1fr;gap:10px}.box{border-left:4px solid #2f5fbb;background:#f6f8fc;padding:12px;border-radius:6px}")
-                .append("table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #d9e0ea;padding:8px;vertical-align:top;text-align:left}th{background:#eef3fb}tr{page-break-inside:avoid}.small{font-size:12px;color:#4e5a6b}.footer{margin-top:28px;border-top:1px solid #d9e0ea;padding-top:14px;color:#687386;font-size:12px}")
+                .append("table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px}th,td{border:1px solid #d9e0ea;padding:8px;vertical-align:top;text-align:left;white-space:normal;overflow-wrap:anywhere;word-break:break-word}th{background:#eef3fb}td:nth-child(5),td:nth-child(6){max-width:0}.small{font-size:12px;color:#4e5a6b}.footer{margin-top:28px;border-top:1px solid #d9e0ea;padding-top:14px;color:#687386;font-size:12px}")
                 .append("@page{size:A4;margin:14mm}@media print{body{background:#fff}.page{max-width:none;padding:0;min-height:auto}.section{break-inside:avoid}.no-print{display:none}.card{background:#fff}.top{break-inside:avoid}}")
                 .append("</style></head><body><main class=\"page\">");
 
@@ -301,8 +302,13 @@ public class AgentDiagnosisEvidenceService {
                 .append(box("处理建议", display(report.get("recommendation"))))
                 .append("</div></section>");
 
+        html.append("<section class=\"section\"><h2>测试场景与异常来源说明</h2>")
+                .append("<div class=\"box\">")
+                .append(escapeHtml(scenarioSourceNote(report, extraInfo)))
+                .append("</div></section>");
+
         html.append("<section class=\"section\"><h2>指标 / 告警摘要</h2>")
-                .append(metricSummary(detail.getEvidenceItems()))
+                .append(metricSummaryV2(detail.getEvidenceItems()))
                 .append("</section>");
 
         html.append("<section class=\"section\"><h2>证据链</h2><table><thead><tr><th>类型</th><th>来源工具</th><th>标题</th><th>内容摘要</th><th>引用</th></tr></thead><tbody>");
@@ -335,6 +341,8 @@ public class AgentDiagnosisEvidenceService {
     private List<ToolResult> runTools(String apiCode, LocalDateTime startTime, LocalDateTime endTime, ToolContext context) {
         String start = FORMATTER.format(startTime);
         String end = FORMATTER.format(endTime);
+        String statsStart = FORMATTER.format(floorToHour(startTime));
+        String statsEnd = FORMATTER.format(ceilToHour(endTime));
         List<ToolResult> results = new ArrayList<>();
 
         QueryApiInfoRequest apiInfo = new QueryApiInfoRequest();
@@ -345,8 +353,8 @@ public class AgentDiagnosisEvidenceService {
 
         QueryApiCallStatsRequest stats = new QueryApiCallStatsRequest();
         stats.setApiCode(apiCode);
-        stats.setStartTime(start);
-        stats.setEndTime(end);
+        stats.setStartTime(statsStart);
+        stats.setEndTime(statsEnd);
         results.add(toolService.queryApiCallStatsWithTrace(stats, context));
 
         QueryAlertEventsRequest alerts = new QueryAlertEventsRequest();
@@ -443,6 +451,14 @@ public class AgentDiagnosisEvidenceService {
         Set<String> keys = new LinkedHashSet<>();
         for (ToolResult result : toolResults) {
             if (result.getEvidenceItems() == null || result.getEvidenceItems().isEmpty()) {
+                AgentEvidenceItemVO statsEvidence = buildStatsEvidence(result);
+                if (statsEvidence != null) {
+                    String key = statsEvidence.getEvidenceType() + "|" + statsEvidence.getSourceTool() + "|" + statsEvidence.getSourceRef();
+                    if (keys.add(key)) {
+                        items.add(statsEvidence);
+                    }
+                    continue;
+                }
                 items.add(emptyEvidence(result));
                 continue;
             }
@@ -459,6 +475,43 @@ public class AgentDiagnosisEvidenceService {
         }
         items.sort(Comparator.comparing(AgentEvidenceItemVO::getEvidenceType).thenComparing(AgentEvidenceItemVO::getTitle));
         return items;
+    }
+
+    private AgentEvidenceItemVO buildStatsEvidence(ToolResult result) {
+        if (!"queryApiCallStats".equals(result.getToolName()) || !result.isSuccess() || !(result.getData() instanceof Map<?, ?> data)) {
+            return null;
+        }
+        long total = longValue(data.get("totalCallCount"));
+        Object hourlyStats = data.get("hourlyStats");
+        boolean hasHourlyStats = hourlyStats instanceof List<?> list && !list.isEmpty();
+        if (total <= 0 && !hasHourlyStats) {
+            return null;
+        }
+        String apiCode = stringValue(data.get("apiCode"));
+        String start = stringValue(data.get("startTime"));
+        String end = stringValue(data.get("endTime"));
+        long fail = longValue(data.get("totalFailCount"));
+        long rateLimited = longValue(data.get("totalRateLimitedCount"));
+        double failRate = doubleValue(data.get("failRate"));
+        int p95 = intValue(data.get("maxP95LatencyMs"));
+
+        AgentEvidenceItemVO item = new AgentEvidenceItemVO();
+        item.setEvidenceType("API_CALL_STAT");
+        item.setSourceTool(result.getToolName());
+        item.setSourceRef("api_call_stat_hourly:" + apiCode + ":" + start);
+        item.setTitle("Hourly API call stats for " + apiCode);
+        item.setContent("total=" + total + ", fail=" + fail + ", failRate=" + failRate
+                + ", rateLimited=" + rateLimited + ", maxP95LatencyMs=" + p95
+                + ". Hourly stat bucket was queried with an expanded hour-aligned window for short-window diagnosis: "
+                + start + " ~ " + end + ".");
+        item.setScore(null);
+        Map<String, Object> extra = new LinkedHashMap<>();
+        extra.put("evidenceType", "API_CALL_STAT");
+        extra.put("sourceTool", result.getToolName());
+        extra.put("sourceType", "api_call_stat_hourly");
+        extra.put("metadata", data);
+        item.setExtraInfo(extra);
+        return item;
     }
 
     private AgentEvidenceItemVO toEvidenceItem(ToolResult result, Map<?, ?> evidence) {
@@ -796,6 +849,15 @@ public class AgentDiagnosisEvidenceService {
         }
     }
 
+    private LocalDateTime floorToHour(LocalDateTime value) {
+        return value.truncatedTo(ChronoUnit.HOURS);
+    }
+
+    private LocalDateTime ceilToHour(LocalDateTime value) {
+        LocalDateTime floored = floorToHour(value);
+        return floored.equals(value) ? floored : floored.plusHours(1);
+    }
+
     private String normalizeMode(String mode) {
         if (!StringUtils.hasText(mode)) {
             return "DETERMINISTIC";
@@ -1002,6 +1064,85 @@ public class AgentDiagnosisEvidenceService {
         return item.getContent();
     }
 
+    private String scenarioSourceNote(Map<String, Object> report, Map<String, Object> extraInfo) {
+        String scenarioRunId = display(firstNonBlank(stringValue(report.get("scenarioRunId")), stringValue(extraInfo.get("scenarioRunId"))));
+        return "本报告来自 API-HUB Agent 的可控流量测试或确定性诊断运行。scenarioRunId="
+                + scenarioRunId
+                + "。异常不是手工插入报告或告警，而是请求经过 Gateway Invoke、Mock Provider、gateway_log、Stats Aggregator、Alert Evaluator 后生成。"
+                + "409/429 等状态码来源以 docs/10_EXCEPTION_SOURCE_AUDIT.md 的审计结论为准。"
+                + "当前报告用于验证系统对高峰、限流、失败率升高和业务冲突等典型风险的检测与诊断能力，仍属于模拟开发环境验证，不代表真实生产事故。";
+    }
+
+    private String metricSummaryV2(List<AgentEvidenceItemVO> evidenceItems) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("<table><thead><tr><th>类型</th><th>等级/窗口数</th><th>关键内容</th></tr></thead><tbody>");
+        int count = 0;
+        for (AgentEvidenceItemVO item : evidenceItems) {
+            if (!"API_CALL_STAT".equals(item.getEvidenceType())) {
+                continue;
+            }
+            builder.append("<tr><td>").append(escapeHtml(display(item.getEvidenceType()))).append("</td><td>")
+                    .append(escapeHtml(display(item.getTitle()))).append("</td><td>")
+                    .append(escapeHtml(display(metricContentV2(item)))).append("</td></tr>");
+            count++;
+        }
+        for (AlertSummary summary : aggregateAlerts(evidenceItems).values()) {
+            builder.append("<tr><td>").append(escapeHtml(summary.alertType)).append("</td><td>")
+                    .append(escapeHtml(summary.severity)).append(" / ").append(summary.count)
+                    .append(" windows</td><td>").append(escapeHtml(summary.describe())).append("</td></tr>");
+            count++;
+        }
+        if (count == 0) {
+            builder.append("<tr><td colspan=\"3\">暂无指标或告警摘要</td></tr>");
+        }
+        builder.append("</tbody></table>");
+        return builder.toString();
+    }
+
+    private Map<String, AlertSummary> aggregateAlerts(List<AgentEvidenceItemVO> evidenceItems) {
+        Map<String, AlertSummary> summaries = new LinkedHashMap<>();
+        for (AgentEvidenceItemVO item : evidenceItems) {
+            if (!"ALERT_EVENT".equals(item.getEvidenceType())) {
+                continue;
+            }
+            Map<String, Object> metadata = metadata(item);
+            String alertType = display(firstNonBlank(stringValue(metadata.get("alertType")), item.getTitle()));
+            String severity = display(metadata.get("severity"));
+            String key = alertType + "|" + severity;
+            summaries.computeIfAbsent(key, ignored -> new AlertSummary(alertType, severity)).add(item, metadata);
+        }
+        return summaries;
+    }
+
+    private String metricContentV2(AgentEvidenceItemVO item) {
+        Map<String, Object> map = metadata(item);
+        if (!map.isEmpty()) {
+            List<String> parts = new ArrayList<>();
+            for (String key : List.of("totalCallCount", "totalFailCount", "failRate", "totalRateLimitedCount",
+                    "maxP95LatencyMs", "maxP99LatencyMs", "startTime", "endTime")) {
+                Object value = map.get(key);
+                if (value != null) {
+                    parts.add(key + "=" + value);
+                }
+            }
+            if (!parts.isEmpty()) {
+                return String.join(", ", parts);
+            }
+        }
+        return item.getContent();
+    }
+
+    private Map<String, Object> metadata(AgentEvidenceItemVO item) {
+        Map<String, Object> extra = item.getExtraInfo();
+        Object metadata = extra == null ? null : extra.get("metadata");
+        if (metadata instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((key, value) -> result.put(String.valueOf(key), value));
+            return result;
+        }
+        return Map.of();
+    }
+
     private String escapeHtml(Object value) {
         String text = stringValue(value);
         return text
@@ -1085,6 +1226,85 @@ public class AgentDiagnosisEvidenceService {
 
     private long elapsedMs(long started) {
         return Math.max(0, (System.nanoTime() - started) / 1_000_000);
+    }
+
+    private static class AlertSummary {
+        private final String alertType;
+        private String severity;
+        private int count;
+        private double maxActualValue;
+        private long minTotalCount = Long.MAX_VALUE;
+        private long maxTotalCount;
+        private String firstWindow = "";
+        private String lastWindow = "";
+        private String sampleReason = "";
+
+        AlertSummary(String alertType, String severity) {
+            this.alertType = alertType;
+            this.severity = severity;
+        }
+
+        void add(AgentEvidenceItemVO item, Map<String, Object> metadata) {
+            count++;
+            severity = higherSeverity(severity, stringValueStatic(metadata.get("severity")));
+            maxActualValue = Math.max(maxActualValue, doubleValueStatic(metadata.get("actualValue")));
+            long total = longValueStatic(metadata.get("totalCount"));
+            if (total > 0) {
+                minTotalCount = Math.min(minTotalCount, total);
+                maxTotalCount = Math.max(maxTotalCount, total);
+            }
+            String windowStart = stringValueStatic(firstNonNullStatic(metadata.get("windowStart"), metadata.get("triggeredAt")));
+            String windowEnd = stringValueStatic(metadata.get("windowEnd"));
+            if (!windowStart.isBlank() && (firstWindow.isBlank() || windowStart.compareTo(firstWindow) < 0)) {
+                firstWindow = windowStart;
+            }
+            if (!windowEnd.isBlank() && (lastWindow.isBlank() || windowEnd.compareTo(lastWindow) > 0)) {
+                lastWindow = windowEnd;
+            }
+            if (sampleReason.isBlank()) {
+                sampleReason = stringValueStatic(firstNonNullStatic(metadata.get("threshold"), item.getContent()));
+            }
+        }
+
+        String describe() {
+            String totalRange = minTotalCount == Long.MAX_VALUE ? "N/A" : minTotalCount + "~" + maxTotalCount;
+            String windowRange = firstWindow.isBlank() && lastWindow.isBlank() ? "N/A" : firstWindow + "~" + lastWindow;
+            return "triggeredWindows=" + count
+                    + ", maxActualValue=" + maxActualValue
+                    + ", totalCountRange=" + totalRange
+                    + ", timeRange=" + windowRange
+                    + ", sampleReason=" + sampleReason;
+        }
+
+        private static String higherSeverity(String left, String right) {
+            return severityRank(right) > severityRank(left) ? right : left;
+        }
+
+        private static int severityRank(String severity) {
+            return switch (stringValueStatic(severity).toUpperCase(Locale.ROOT)) {
+                case "CRITICAL" -> 4;
+                case "HIGH" -> 3;
+                case "WARNING" -> 2;
+                case "INFO" -> 1;
+                default -> 0;
+            };
+        }
+
+        private static Object firstNonNullStatic(Object first, Object second) {
+            return first == null ? second : first;
+        }
+
+        private static long longValueStatic(Object value) {
+            return value instanceof Number number ? number.longValue() : 0L;
+        }
+
+        private static double doubleValueStatic(Object value) {
+            return value instanceof Number number ? number.doubleValue() : 0d;
+        }
+
+        private static String stringValueStatic(Object value) {
+            return value == null ? "" : String.valueOf(value);
+        }
     }
 
     private record DiagnosisDecision(

@@ -367,3 +367,11 @@ HTML report sections:
 - Footer with Microsoft Edge / Chrome print-to-PDF instructions.
 
 Next stages can add a full frontend workbench page or LLM-based natural-language polishing, while keeping this deterministic report artifact as the evidence baseline.
+
+## Exception Source Credibility Update
+
+The current deterministic diagnosis flow is validated with controlled traffic injection. Exceptions are not inserted directly into reports or alerts. Requests flow through Scenario Runner, Gateway Invoke, Mock Provider, gateway_log, Stats Aggregator, Alert Evaluator, and Agent Diagnosis before appearing in evidence or HTML/PDF reports.
+
+For the current implementation, HTTP 409 is produced by Mock Provider business-conflict scenarios such as duplicate request or sold out. HTTP 429 is produced by Mock Provider RATE_LIMITED scenarios and then recorded by Gateway Invoke in gateway_log. Gateway Invoke currently records and proxies these statuses; it does not yet enforce an independent local rate-limit rule.
+
+Short-window alerts use real gateway_log aggregation: HIGH_FAILURE_RATE is triggered by failRate >= 0.10, and HIGH_RATE_LIMIT is triggered by rateLimitCount >= 5 or rateLimitRate >= 0.05. See `10_EXCEPTION_SOURCE_AUDIT.md` for the full audit.
