@@ -56,3 +56,8 @@ gateway_log -> api_call_stat_hourly
 ## Exception Source Audit Update
 
 - `10_EXCEPTION_SOURCE_AUDIT.md`: documents the confirmed sources of HTTP 409, HTTP 429, HIGH_FAILURE_RATE, and HIGH_RATE_LIMIT, including the boundary between controlled traffic injection and direct data fabrication.
+
+## LLM Agent Readiness Update
+
+- `11_LLM_AGENT_READINESS.md`: records the pre-LLM deterministic baseline, normal/abnormal comparison, Tool contract closure, Evidence contract closure, and constraints for future PromptBuilder / LLM diagnosis work.
+- Next recommended development stage: LLM Prompt Contract v1, then DashScope LLM Diagnosis v1 after deterministic contracts remain green.
