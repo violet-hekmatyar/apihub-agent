@@ -333,3 +333,37 @@ Rule mapping:
 - If no alert or threshold breach exists, the service still writes a normal deterministic report and records empty evidence markers for tools that returned no evidence.
 
 Next stages remain LLM-generated natural-language report refinement, RAG/Milvus evidence retrieval, and frontend report browsing.
+---
+
+## Agent Report Workbench v1
+
+Agent Report Workbench v1 turns persisted diagnosis reports into frontend-ready and print-ready artifacts.
+
+Dev endpoints:
+
+```http
+GET /api/dev/agent/reports
+GET /api/dev/agent/reports/{reportId}
+GET /api/dev/agent/reports/{reportId}/html
+```
+
+Capabilities:
+
+- Report list supports filtering by `apiCode`, `riskLevel`, `status`, `startTime`, `endTime`, `keyword`, `pageNo`, and `pageSize`.
+- Report detail aggregates `agent_report`, `evidence_item`, and `tool_call_trace`.
+- Tool traces are associated by `agent_report.session_id + agent_report.trace_id`, because `tool_call_trace` has no direct `report_id`.
+- HTML export returns self-contained `text/html; charset=UTF-8` with inline CSS and no external CDN, CSS, JS, chart library, or PDF library.
+- HTML is optimized for browser preview and Edge / Chrome print-to-PDF with `@media print` and `@page { size: A4; margin: 14mm; }`.
+- The backend does not generate PDF files directly in this stage.
+
+HTML report sections:
+
+- Header with report code, report id, generated time, and risk badge.
+- Overview cards for API, window, scenarioRunId, status, evidence count, tool-call count, and diagnosis mode.
+- Diagnosis conclusion: summary, root cause, and recommendation.
+- Alert and metric summary from `ALERT_EVENT` and `API_CALL_STAT` evidence.
+- Evidence table.
+- Tool trace table with request and response summaries.
+- Footer with Microsoft Edge / Chrome print-to-PDF instructions.
+
+Next stages can add a full frontend workbench page or LLM-based natural-language polishing, while keeping this deterministic report artifact as the evidence baseline.
