@@ -1,5 +1,6 @@
 package com.apihub.mockprovider.common;
 
+import com.apihub.mockprovider.scenario.ScenarioRunNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -16,10 +17,17 @@ public class MockProviderExceptionHandler {
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class
+            MethodArgumentTypeMismatchException.class,
+            IllegalArgumentException.class
     })
     public ResponseEntity<MockResponse<Map<String, Object>>> badRequest(Exception exception, HttpServletRequest request) {
-        return ResponseSupport.error(HttpStatus.BAD_REQUEST, "invalid request", traceId(request));
+        String message = exception instanceof IllegalArgumentException ? exception.getMessage() : "invalid request";
+        return ResponseSupport.error(HttpStatus.BAD_REQUEST, message, traceId(request));
+    }
+
+    @ExceptionHandler(ScenarioRunNotFoundException.class)
+    public ResponseEntity<MockResponse<Map<String, Object>>> notFound(ScenarioRunNotFoundException exception, HttpServletRequest request) {
+        return ResponseSupport.error(HttpStatus.NOT_FOUND, exception.getMessage(), traceId(request));
     }
 
     @ExceptionHandler(Exception.class)
@@ -28,6 +36,6 @@ public class MockProviderExceptionHandler {
     }
 
     private static String traceId(HttpServletRequest request) {
-        return ResponseSupport.traceId(request.getHeader("X-Trace-Id"));
+        return ResponseSupport.safeTraceId(request.getHeader("X-Trace-Id"));
     }
 }

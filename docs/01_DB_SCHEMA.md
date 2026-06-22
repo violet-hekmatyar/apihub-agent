@@ -1482,3 +1482,105 @@ agent_report
 04 约束开发方式。
 ```
 
+---
+
+# 15. Scenario Runner Persistence Tables
+
+This section records the Scenario Runner persistence tables introduced for later asynchronous traffic simulation. The first version still keeps scenario definitions in code configuration. It does not add a `scenario_definition` table.
+
+## 15.1 `scenario_run`
+
+Purpose: one row per Scenario Runner batch. It stores launch parameters, run status, progress counters, timestamps, and the final run-level summary.
+
+Status values:
+
+```text
+PENDING
+RUNNING
+COMPLETED
+FAILED
+CANCELLED
+```
+
+Fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `BIGINT` | Internal primary key |
+| `scenario_run_id` | `VARCHAR(64)` | Unique external run ID returned to callers |
+| `scenario_id` | `VARCHAR(64)` | Scenario code maintained by code config |
+| `status` | `VARCHAR(32)` | Run status |
+| `target_gateway_base_url` | `VARCHAR(255)` | Target apihub-server Gateway Invoke base URL |
+| `logical_duration_seconds` | `INT` | Logical scenario duration |
+| `time_scale` | `DECIMAL(10,2)` | Time compression ratio |
+| `ramp_up_seconds` | `INT` | Ramp-up logical seconds |
+| `steady_seconds` | `INT` | Steady or peak logical seconds |
+| `ramp_down_seconds` | `INT` | Ramp-down logical seconds |
+| `base_rps` | `DECIMAL(10,2)` | Base requests per second |
+| `peak_rps` | `DECIMAL(10,2)` | Peak requests per second |
+| `max_concurrency` | `INT` | Maximum concurrent calls |
+| `random_seed` | `BIGINT` | Seed for repeatable traffic |
+| `total_planned_requests` | `INT` | Planned request count |
+| `total_sent_requests` | `INT` | Sent request count |
+| `success_count` | `INT` | Successful call count |
+| `fail_count` | `INT` | Failed call count |
+| `started_at` | `DATETIME` | Run start time |
+| `finished_at` | `DATETIME` | Run finish time |
+| `result_summary` | `JSON` | Final summarized result |
+| `error_message` | `VARCHAR(1024)` | Run-level error message |
+| `extra_info` | `JSON` | Extension info |
+| `created_at` | `DATETIME` | Created time |
+| `updated_at` | `DATETIME` | Updated time |
+
+Indexes:
+
+| Index | Fields |
+| --- | --- |
+| `uk_scenario_run_id` | `scenario_run_id` |
+| `idx_scenario_id_status` | `scenario_id`, `status` |
+| `idx_status_created_at` | `status`, `created_at` |
+| `idx_created_at` | `created_at` |
+
+## 15.2 `scenario_call_sample`
+
+Purpose: a small sampled subset of calls made during a Scenario Runner batch. Full per-call facts remain in `gateway_log`; this table is only for quick inspection and does not replace `gateway_log`.
+
+Fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `BIGINT` | Internal primary key |
+| `scenario_run_id` | `VARCHAR(64)` | Related Scenario Runner run ID |
+| `sequence_no` | `INT` | Sequence number inside the run |
+| `api_code` | `VARCHAR(64)` | API code |
+| `app_code` | `VARCHAR(64)` | Consumer app code |
+| `mock_scenario` | `VARCHAR(64)` | Mock scenario code |
+| `phase` | `VARCHAR(32)` | Traffic phase such as ramp-up, steady, peak, or ramp-down |
+| `trace_id` | `VARCHAR(128)` | Trace ID returned by Gateway Invoke |
+| `request_id` | `VARCHAR(64)` | Request ID sent to Gateway Invoke |
+| `gateway_log_id` | `BIGINT` | Related `gateway_log.id` when available |
+| `upstream_status` | `INT` | Upstream HTTP status |
+| `latency_ms` | `INT` | Gateway Invoke latency |
+| `success` | `TINYINT(1)` | Whether the sampled call succeeded |
+| `error_code` | `VARCHAR(128)` | Gateway or upstream error code |
+| `called_at` | `DATETIME` | Call time |
+| `extra_info` | `JSON` | Extension info |
+| `created_at` | `DATETIME` | Created time |
+
+Indexes:
+
+| Index | Fields |
+| --- | --- |
+| `idx_run_sequence` | `scenario_run_id`, `sequence_no` |
+| `idx_run_api` | `scenario_run_id`, `api_code` |
+| `idx_trace_id` | `trace_id` |
+| `idx_gateway_log_id` | `gateway_log_id` |
+| `idx_called_at` | `called_at` |
+
+## 15.3 Relationship to runtime observation tables
+
+- `gateway_log`: full fact table for every Gateway Invoke call.
+- `scenario_run`: one Scenario Runner batch status and summary row.
+- `scenario_call_sample`: small sampled rows for inspection; it does not replace `gateway_log`.
+- `api_call_stat_hourly`: still populated later by Stats Aggregator from `gateway_log`.
+- `alert_event`: still populated later by Alert Evaluator.

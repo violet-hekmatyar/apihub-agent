@@ -182,6 +182,36 @@ traceId 是否返回。
 
 ---
 
+## 最新 Apifox 自动化测试报告
+
+成功报告：
+
+```text
+docs/apifox/reports/01_scenario_runner_lecture_peak_30s_report.html
+```
+
+报告证明的链路：
+
+```text
+Scenario Runner
+-> Gateway Invoke
+-> Mock Provider
+-> gateway_log
+-> scenario_run
+-> scenario_call_sample
+-> resultSummary / sample-calls
+```
+
+失败报告目录：
+
+```text
+docs/apifox/reports/failed/
+```
+
+`failed` 目录用于保存测试配置迭代记录，不代表最终系统失败。当前结论是：模拟场景 API 调用链路已经通过 Apifox 自动化测试验证；下一步验收重点应转向 Stats Aggregator v1。
+
+---
+
 ## 5. 后续新增验收项
 
 ### 5.1 Gateway Invoke 验收
@@ -213,6 +243,16 @@ randomSeed 固定时结果可复现。
 ```
 
 ### 5.3 Stats Aggregator 验收
+
+### Stats Aggregator v1 后续验收
+
+建议后续验收步骤：
+
+1. 跑一次 Scenario Runner。
+2. 调用后续新增的统计聚合接口。
+3. 验证 `api_call_stat_hourly` 出现新统计。
+4. 验证 `queryApiCallStats` 能查到新聚合数据。
+5. 重复执行聚合不能导致统计翻倍。
 
 实现后新增：
 
@@ -261,3 +301,37 @@ alert_event 已由规则生成；
 LLM 已生成正式诊断报告；
 Milvus/RAG 向量检索已接入。
 ```
+
+---
+
+## 7. Scenario Runner Persistence Validation Notes
+
+Introducing `scenario_run` and `scenario_call_sample` increases the table count for newly initialized databases. Existing local databases must run `scripts/sql/dev_sync_scenario_run_schema.sql` before they have these two tables.
+
+Gateway Invoke smoke does not depend on the new tables. Later Scenario Runner smoke will depend on them.
+
+Backend database health smoke should accept table counts greater than or equal to the previous baseline, rather than requiring an exact table count. This keeps smoke stable whether the local database has already run the Scenario Runner schema sync script or not.
+
+Scenario Runner v1 smoke is part of `scripts/check-mock-provider-smoke.ps1`. It requires:
+
+```text
+apihub-server running on 8080
+apihub-mock-provider running on 8090
+MySQL synchronized with scripts/sql/dev_sync_scenario_run_schema.sql
+```
+
+The smoke starts a small `LECTURE_REGISTER_PEAK` run, polls `GET /mock-provider/scenario-runs/{scenarioRunId}` until `COMPLETED`, then checks `/result` and `/sample-calls`. It does not validate `api_call_stat_hourly` or `alert_event`; those remain later Stats Aggregator and Alert Evaluator responsibilities.
+
+The Scenario Runner smoke also checks:
+
+```text
+missing X-Trace-Id generates a 32-character lowercase hex trace id
+invalid X-Trace-Id returns 400
+literal {scenarioRunId} does not return 500
+well-formed missing scenarioRunId returns 404
+resultSummary distributions are full-run statistics
+sample-calls returns representative samples
+cancel marks a running run as CANCELLED
+```
+
+For a five-minute peak run, `maxConcurrency` must cap concurrent Gateway Invoke workers while allowing the scheduler to keep dispatching by target RPS. `resultSummary.totalSentRequests`, the sums of API/status/phase distributions, and `latencySummary.count` should all equal `totalSentRequests`.

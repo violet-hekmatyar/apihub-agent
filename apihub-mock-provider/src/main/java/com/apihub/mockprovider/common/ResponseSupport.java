@@ -19,9 +19,24 @@ public final class ResponseSupport {
 
     public static String traceId(String headerTraceId) {
         if (StringUtils.hasText(headerTraceId)) {
+            String traceId = headerTraceId.trim();
+            if (!traceId.matches("^[a-f0-9]{32}$")) {
+                throw new IllegalArgumentException("invalid X-Trace-Id");
+            }
+            return traceId;
+        }
+        return newTraceId();
+    }
+
+    public static String safeTraceId(String headerTraceId) {
+        if (StringUtils.hasText(headerTraceId) && headerTraceId.trim().matches("^[a-f0-9]{32}$")) {
             return headerTraceId.trim();
         }
-        return "mock_trace_" + UUID.randomUUID().toString().replace("-", "");
+        return newTraceId();
+    }
+
+    private static String newTraceId() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     public static String scenario(String headerScenario, String requestScenario) {

@@ -107,6 +107,29 @@ function Assert-ContainsText {
     return $true
 }
 
+function Assert-Matches {
+    param($Name, $Endpoint, $Field, $Pattern, $Actual)
+
+    if ([string]$Actual -notmatch $Pattern) {
+        Write-Fail -Name $Name -Endpoint $Endpoint -Expected "$Field matches $Pattern" -Actual "$Field=$Actual"
+        return $false
+    }
+    return $true
+}
+
+function Sum-ObjectValues {
+    param($Object)
+
+    $sum = 0
+    if ($null -eq $Object) {
+        return 0
+    }
+    foreach ($property in $Object.PSObject.Properties) {
+        $sum += [int]$property.Value
+    }
+    return $sum
+}
+
 function Run-MockSmoke {
     param(
         [string]$Name,
@@ -202,6 +225,77 @@ Run-MockSmoke -Name "library borrow normal" -Method "GET" -Path "/mock-provider/
 Run-MockSmoke -Name "library borrow downstream timeout" -Method "GET" -Path "/mock-provider/library/borrow?studentNo=2023001001&mockScenario=DOWNSTREAM_TIMEOUT" -ExpectedCode 504 -ExtraChecks {
     param($response, $name, $endpoint)
     return Assert-ContainsText -Name $name -Endpoint $endpoint -Field "message" -ExpectedText "library downstream timeout" -Actual $response.message
+}
+
+Run-MockSmoke -Name "scenario runner invalid trace id" -Method "POST" -Path "/mock-provider/scenario-runs" -Headers @{ "X-Trace-Id" = "mock_trace_demo" } -ExpectedCode 400 -Body '{"scenarioId":"LECTURE_REGISTER_PEAK","targetGatewayBaseUrl":"http://localhost:8080","loadProfile":{"logicalDurationSeconds":10,"timeScale":10,"rampUpSeconds":2,"steadySeconds":6,"rampDownSeconds":2,"baseRps":1.0,"peakRps":3.0,"maxConcurrency":3,"randomSeed":20260619},"sampleLimit":5}' -ExtraChecks {
+    param($response, $name, $endpoint)
+    return Assert-ContainsText -Name $name -Endpoint $endpoint -Field "message" -ExpectedText "invalid X-Trace-Id" -Actual $response.message
+}
+
+Run-MockSmoke -Name "scenario runner literal placeholder id" -Method "GET" -Path "/mock-provider/scenario-runs/%7BscenarioRunId%7D" -ExpectedCode 400 -ExtraChecks {
+    param($response, $name, $endpoint)
+    return Assert-ContainsText -Name $name -Endpoint $endpoint -Field "message" -ExpectedText "invalid scenarioRunId format" -Actual $response.message
+}
+
+Run-MockSmoke -Name "scenario runner not found" -Method "GET" -Path "/mock-provider/scenario-runs/sr_not_found_12345678" -ExpectedCode 404 -ExtraChecks {
+    param($response, $name, $endpoint)
+    return Assert-ContainsText -Name $name -Endpoint $endpoint -Field "message" -ExpectedText "scenario run not found" -Actual $response.message
+}
+
+Run-MockSmoke -Name "scenario runner create lecture peak" -Method "POST" -Path "/mock-provider/scenario-runs" -ExpectedCode 202 -Body '{"scenarioId":"LECTURE_REGISTER_PEAK","targetGatewayBaseUrl":"http://localhost:8080","loadProfile":{"logicalDurationSeconds":10,"timeScale":10,"rampUpSeconds":2,"steadySeconds":6,"rampDownSeconds":2,"baseRps":1.0,"peakRps":3.0,"maxConcurrency":3,"randomSeed":20260619},"sampleLimit":5}' -ExtraChecks {
+    param($response, $name, $endpoint)
+    $script:ScenarioRunId = $response.data.scenarioRunId
+    $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.status" -Expected "RUNNING" -Actual $response.data.status
+    $ok = (Assert-ContainsText -Name $name -Endpoint $endpoint -Field "data.scenarioRunId" -ExpectedText "sr_" -Actual $script:ScenarioRunId) -and $ok
+    $ok = (Assert-Matches -Name $name -Endpoint $endpoint -Field "traceId" -Pattern "^[a-f0-9]{32}$" -Actual $response.traceId) -and $ok
+    return $ok
+}
+
+if (-not [string]::IsNullOrWhiteSpace($script:ScenarioRunId)) {
+    $finalStatus = $null
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        $statusResponse = Invoke-MockRequest -Method "GET" -Path "/mock-provider/scenario-runs/$script:ScenarioRunId"
+        $finalStatus = $statusResponse.data.status
+        if ($finalStatus -eq "COMPLETED" -or $finalStatus -eq "FAILED") {
+            break
+        }
+    }
+
+    if ($finalStatus -ne "COMPLETED") {
+        Write-Fail -Name "scenario runner completed" -Endpoint "GET /mock-provider/scenario-runs/$script:ScenarioRunId" -Expected "status=COMPLETED" -Actual "status=$finalStatus"
+    } else {
+        Write-Host "[PASS] scenario runner completed" -ForegroundColor Green
+    }
+
+    Run-MockSmoke -Name "scenario runner result" -Method "GET" -Path "/mock-provider/scenario-runs/$script:ScenarioRunId/result" -ExpectedCode 200 -ExtraChecks {
+        param($response, $name, $endpoint)
+        $total = [int]$response.data.totalSentRequests
+        $ok = Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.totalSentRequests" -Threshold 0 -Actual $total
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "resultSummary.totalSentRequests" -Expected $total -Actual ([int]$response.data.resultSummary.totalSentRequests)) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "sum(statusDistribution)" -Expected $total -Actual (Sum-ObjectValues $response.data.resultSummary.statusDistribution)) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "sum(apiDistribution)" -Expected $total -Actual (Sum-ObjectValues $response.data.resultSummary.apiDistribution)) -and $ok
+        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "latencySummary.count" -Expected $total -Actual ([int]$response.data.resultSummary.latencySummary.count)) -and $ok
+        return $ok
+    }
+
+    Run-MockSmoke -Name "scenario runner sample calls" -Method "GET" -Path "/mock-provider/scenario-runs/$script:ScenarioRunId/sample-calls?limit=20" -ExpectedCode 200 -ExtraChecks {
+        param($response, $name, $endpoint)
+        return Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.samples.Count" -Threshold 0 -Actual @($response.data.samples).Count
+    }
+}
+
+Run-MockSmoke -Name "scenario runner create cancellable" -Method "POST" -Path "/mock-provider/scenario-runs" -ExpectedCode 202 -Body '{"scenarioId":"NORMAL_DAY","targetGatewayBaseUrl":"http://localhost:8080","loadProfile":{"logicalDurationSeconds":30,"timeScale":1,"rampUpSeconds":10,"steadySeconds":10,"rampDownSeconds":10,"baseRps":1.0,"peakRps":2.0,"maxConcurrency":2,"randomSeed":20260620},"sampleLimit":5}' -ExtraChecks {
+    param($response, $name, $endpoint)
+    $script:CancelRunId = $response.data.scenarioRunId
+    return Assert-ContainsText -Name $name -Endpoint $endpoint -Field "data.scenarioRunId" -ExpectedText "sr_" -Actual $script:CancelRunId
+}
+
+if (-not [string]::IsNullOrWhiteSpace($script:CancelRunId)) {
+    Run-MockSmoke -Name "scenario runner cancel" -Method "POST" -Path "/mock-provider/scenario-runs/$script:CancelRunId/cancel" -ExpectedCode 200 -ExtraChecks {
+        param($response, $name, $endpoint)
+        return Assert-Equal -Name $name -Endpoint $endpoint -Field "data.status" -Expected "CANCELLED" -Actual $response.data.status
+    }
 }
 
 if ($script:Failed -gt 0) {

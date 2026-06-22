@@ -255,7 +255,7 @@ Run-SmokeTest `
     -ExtraChecks {
         param($response, $name, $endpoint)
         $ok = Assert-Equal -Name $name -Endpoint $endpoint -Field "data.databaseName" -Expected "apihub_agent" -Actual $response.data.databaseName
-        $ok = (Assert-Equal -Name $name -Endpoint $endpoint -Field "data.tableCount" -Expected 17 -Actual $response.data.tableCount) -and $ok
+        $ok = (Assert-GreaterThan -Name $name -Endpoint $endpoint -Field "data.tableCount" -Threshold 16 -Actual $response.data.tableCount) -and $ok
         return $ok
     }
 
@@ -775,7 +775,7 @@ Run-SmokeTest `
     -Name "gateway invoke auth login normal" `
     -Method "POST" `
     -Path "/api/dev/gateway/invoke" `
-    -Headers @{ "X-Request-Id" = "req_smoke_gateway_auth_normal"; "X-Trace-Id" = "trace_smoke_gateway_auth_normal" } `
+    -Headers @{ "X-Request-Id" = "req_smoke_gateway_auth_normal"; "X-Trace-Id" = "11111111111111111111111111111111" } `
     -Body '{"apiCode":"AUTH_LOGIN","appCode":"COURSE_HELPER","mockScenario":"NORMAL","body":{"appCode":"COURSE_HELPER","studentNo":"2023001001","timestamp":"2026-06-19T12:00:00","nonce":"mock_nonce_smoke","signature":"mock_signature_valid"},"timeoutMs":3000,"clientInfo":{"clientIp":"10.0.0.12","userAgent":"backend-smoke/1.0"},"scenarioContext":{"scenarioRunId":"scenario_run_smoke_gateway","scenarioId":"AUTH_LOGIN_NORMAL","phase":"SMOKE","sequenceNo":1}}' `
     -ExpectedCode 200 `
     -ExtraChecks {
@@ -792,7 +792,7 @@ Run-SmokeTest `
     -Name "gateway invoke lecture register rate limited" `
     -Method "POST" `
     -Path "/api/dev/gateway/invoke" `
-    -Headers @{ "X-Request-Id" = "req_smoke_gateway_lecture_rate"; "X-Trace-Id" = "trace_smoke_gateway_lecture_rate" } `
+    -Headers @{ "X-Request-Id" = "req_smoke_gateway_lecture_rate"; "X-Trace-Id" = "22222222222222222222222222222222" } `
     -Body '{"apiCode":"LECTURE_REGISTER","appCode":"LECTURE_PORTAL","mockScenario":"RATE_LIMITED","body":{"lectureId":"lec_20260619_ai_001","studentNo":"2023001001","idempotencyKey":"idem_smoke_lecture_001"},"timeoutMs":3000,"clientInfo":{"clientIp":"10.0.0.12","userAgent":"backend-smoke/1.0"},"scenarioContext":{"scenarioRunId":"scenario_run_smoke_gateway","scenarioId":"LECTURE_REGISTER_PEAK","phase":"PEAK","sequenceNo":2}}' `
     -ExpectedCode 200 `
     -ExtraChecks {
