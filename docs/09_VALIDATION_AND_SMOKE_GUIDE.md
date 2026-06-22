@@ -411,3 +411,71 @@ POST /api/dev/stats/aggregate
 - 聚合事实源为 `gateway_log.request_time`，窗口条件为 `request_time >= startTime AND request_time < endTime`。
 - `scenarioRunId` 只用于 smoke 定位和响应统计，不作为 `api_call_stat_hourly` 写入维度，避免把全局小时统计覆盖成局部场景统计。
 - 重复执行同一窗口时，按聚合出来的 `api_id + stat_time` 删除旧统计后重建，避免统计翻倍。
+---
+
+## Alert Evaluator v1 验收
+
+新增 smoke 脚本：
+
+```text
+scripts/check-alert-evaluator-smoke.ps1
+```
+
+默认运行方式：
+
+```powershell
+cd D:\apihub-agent-dev
+powershell -ExecutionPolicy Bypass -File .\scripts\check-alert-evaluator-smoke.ps1
+```
+
+指定服务地址：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-alert-evaluator-smoke.ps1 -BaseUrl http://localhost:8080 -MockProviderBaseUrl http://localhost:8090
+```
+
+该脚本验证链路：
+
+```text
+Scenario Runner
+-> Gateway Invoke
+-> gateway_log
+-> Alert Evaluator
+-> alert_event
+-> queryAlertEvents
+```
+
+Alert Evaluator v1 开发态接口：
+
+```http
+POST /api/dev/alerts/evaluate
+```
+
+示例请求：
+
+```json
+{
+  "startTime": "2026-06-22 10:00:00",
+  "endTime": "2026-06-22 10:05:00",
+  "mode": "DEV_SHORT_WINDOW",
+  "windowSeconds": 30,
+  "scenarioRunId": "sr_20260622_demo",
+  "apiCode": "LECTURE_REGISTER",
+  "forceRebuild": true
+}
+```
+
+说明：
+
+- `HOURLY` 模式基于 `api_call_stat_hourly` 评估，窗口为小时级。
+- `DEV_SHORT_WINDOW` 模式支持 `windowSeconds=30`，直接读取 `gateway_log`，不会写入或污染 `api_call_stat_hourly`。
+- `scenarioRunId` 只用于短窗口 smoke/定位过滤，正式小时统计仍按 API 和时间窗口评估。
+- 规则命中后写入 `alert_event`，`extra_info` 包含 `mode`、`windowSeconds`、`statSource`、`scenarioRunId`、阈值、实际值和证据摘要。
+- `forceRebuild=true` 时，会删除同 API、同窗口、同告警类型、同模式和同窗口秒数的 Alert Evaluator v1 旧告警后重建，避免重复执行产生脏重复。
+- `queryAlertEvents` 支持通过 `alertType` 或 `eventType` 查询新生成的告警，并在返回的 `alerts[].extraInfo` 中透出 evaluator 证据。
+
+当前边界：
+
+- 不接入 LLM Agent。
+- 不做 RAG、前端工作台或自动修复。
+- 不新增数据库表结构。
