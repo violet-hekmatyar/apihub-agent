@@ -7,13 +7,27 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @Component
 public class LlmDiagnosisValidator {
 
     private static final Set<String> VALID_RISK_LEVELS = Set.of("NORMAL", "WARNING", "CRITICAL", "UNKNOWN");
     private static final List<String> NORMAL_FORBIDDEN_WORDS = List.of(
-            "故障", "事故", "异常", "失败率升高", "限流异常", "outage", "incident", "failure spike", "rate-limit anomaly"
+            "\u6545\u969c", "\u4e8b\u6545", "\u5f02\u5e38", "\u5931\u8d25\u7387\u5347\u9ad8", "\u9650\u6d41\u5f02\u5e38",
+            "outage", "incident", "failure spike", "rate-limit anomaly",
+            "production incident occurred", "outage occurred", "failure spike detected",
+            "rate-limit anomaly detected", "serious outage", "active incident"
+    );
+    private static final List<String> NORMAL_SAFE_NEGATED_PHRASES = List.of(
+            "no production incident",
+            "no live-user impact",
+            "not a production incident",
+            "no outage",
+            "no service degradation",
+            "no user-facing impact",
+            "without production impact",
+            "development simulation only"
     );
     private static final List<String> ALERT_TYPES = List.of(
             "HIGH_5XX", "AUTH_FAILURE_SPIKE", "HIGH_RATE_LIMIT", "HIGH_FAILURE_RATE"
@@ -81,7 +95,7 @@ public class LlmDiagnosisValidator {
         if (!"NORMAL_BASELINE".equals(scenarioType) || !"NORMAL".equals(normalize(output.getRiskLevel()))) {
             return;
         }
-        String text = joinedOutput(output).toLowerCase(Locale.ROOT);
+        String text = removeSafeNegatedPhrases(joinedNormalRiskFields(output)).toLowerCase(Locale.ROOT);
         for (String word : NORMAL_FORBIDDEN_WORDS) {
             if (text.contains(word.toLowerCase(Locale.ROOT))) {
                 result.error("NORMAL baseline output contains abnormal wording: " + word);
@@ -154,6 +168,31 @@ public class LlmDiagnosisValidator {
             }
         }
         return builder.toString();
+    }
+
+    private String joinedNormalRiskFields(LlmDiagnosisOutput output) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(output.getExecutiveSummary()).append(' ')
+                .append(output.getTechnicalSummary()).append(' ')
+                .append(output.getRootCause()).append(' ')
+                .append(output.getImpactScope()).append(' ');
+        if (output.getRecommendations() != null) {
+            for (LlmDiagnosisOutput.Recommendation recommendation : output.getRecommendations()) {
+                builder.append(' ').append(recommendation.getAction()).append(' ').append(recommendation.getReason());
+            }
+        }
+        return builder.toString();
+    }
+
+    private String removeSafeNegatedPhrases(String text) {
+        if (text == null) {
+            return "";
+        }
+        String sanitized = text;
+        for (String phrase : NORMAL_SAFE_NEGATED_PHRASES) {
+            sanitized = sanitized.replaceAll("(?i)" + Pattern.quote(phrase), " ");
+        }
+        return sanitized;
     }
 
     private void requireText(LlmDiagnosisValidationResult result, String field, String value) {

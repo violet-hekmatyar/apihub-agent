@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Locale;
 
 @Component
-public class MockLlmDiagnosisClient {
+public class MockLlmDiagnosisClient implements LlmDiagnosisClient {
 
     private final ObjectMapper objectMapper;
 
@@ -18,11 +18,15 @@ public class MockLlmDiagnosisClient {
         this.objectMapper = objectMapper;
     }
 
-    public String diagnose(LlmDiagnosisPrompt prompt, LlmDiagnosisInput input) {
+    @Override
+    public LlmDiagnosisClientResult diagnose(LlmDiagnosisPrompt prompt, LlmDiagnosisInput input) {
+        long started = System.nanoTime();
         try {
-            return objectMapper.writeValueAsString(buildOutput(input));
+            return LlmDiagnosisClientResult.success("MOCK", "mock-deterministic",
+                    objectMapper.writeValueAsString(buildOutput(input)), "", elapsedMs(started));
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("failed to write mock LLM response", e);
+            return LlmDiagnosisClientResult.failure("MOCK", "mock-deterministic", "MOCK_JSON_ERROR",
+                    "failed to write mock LLM response", elapsedMs(started));
         }
     }
 
@@ -132,5 +136,9 @@ public class MockLlmDiagnosisClient {
 
     private String firstNonBlank(String first, String second) {
         return StringUtils.hasText(first) ? first : second;
+    }
+
+    private long elapsedMs(long started) {
+        return Math.max(0, (System.nanoTime() - started) / 1_000_000);
     }
 }

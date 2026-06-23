@@ -217,3 +217,32 @@ Validation entry points:
 mvn test
 scripts/check-llm-prompt-builder-mock-smoke.ps1
 ```
+
+---
+
+## 8. Current DashScope LLM Diagnosis Implementation
+
+DashScope LLM Diagnosis v1 is now implemented as a provider path in:
+
+```text
+apihub-server/src/main/java/com/apihub/agent/dev/llm/
+```
+
+It keeps the deterministic report and evidence chain as the factual source, calls DashScope only for structured JSON report generation, then reuses the existing Parser / Validator / fallback path.
+
+Validation entry points:
+
+```text
+mvn test
+scripts/check-llm-prompt-builder-mock-smoke.ps1
+scripts/check-dashscope-llm-diagnosis-smoke.ps1
+```
+
+Still not implemented:
+
+```text
+LLM Eval Cases v1
+RAG / Milvus
+frontend workbench
+Function Calling / ReAct / Multi-Agent
+```
