@@ -198,3 +198,22 @@ LLM 只基于 evidence package 生成结构化诊断文本。
 - Tool 入参、出参、权限、Evidence 变化必须同步 `02_TOOL_CONTRACT.md`。
 - LLM 输入输出、Prompt、JSON Schema、评测规则变化必须同步 `12_LLM_PROMPT_CONTRACT.md`。
 - 历史设计不要混入主线，可归档到 `docs/archive/v1/`。
+
+---
+
+## 7. Current LLM Mock Implementation
+
+The first local LLM-readiness implementation now lives in:
+
+```text
+apihub-server/src/main/java/com/apihub/agent/dev/llm/
+```
+
+It implements the documented PromptBuilder + Parser + Mock Client stage only. It does not call real LLM providers and does not persist LLM output.
+
+Validation entry points:
+
+```text
+mvn test
+scripts/check-llm-prompt-builder-mock-smoke.ps1
+```
