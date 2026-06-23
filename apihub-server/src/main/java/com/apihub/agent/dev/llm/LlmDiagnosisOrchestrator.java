@@ -20,17 +20,20 @@ public class LlmDiagnosisOrchestrator {
     private final AgentDiagnosisEvidenceService diagnosisEvidenceService;
     private final LlmDiagnosisPromptBuilder promptBuilder;
     private final MockLlmDiagnosisClient mockClient;
+    private final DashScopeLlmDiagnosisClient dashScopeClient;
     private final LlmDiagnosisOutputParser parser;
     private final LlmDiagnosisValidator validator;
 
     public LlmDiagnosisOrchestrator(AgentDiagnosisEvidenceService diagnosisEvidenceService,
                                     LlmDiagnosisPromptBuilder promptBuilder,
                                     MockLlmDiagnosisClient mockClient,
+                                    DashScopeLlmDiagnosisClient dashScopeClient,
                                     LlmDiagnosisOutputParser parser,
                                     LlmDiagnosisValidator validator) {
         this.diagnosisEvidenceService = diagnosisEvidenceService;
         this.promptBuilder = promptBuilder;
         this.mockClient = mockClient;
+        this.dashScopeClient = dashScopeClient;
         this.parser = parser;
         this.validator = validator;
     }
@@ -38,20 +41,56 @@ public class LlmDiagnosisOrchestrator {
     public LlmDiagnosisResult runMock(Long reportId, boolean includePrompt) {
         AgentReportDetailVO detail = diagnosisEvidenceService.getReport(reportId);
         LlmDiagnosisInput input = buildInput(detail);
+        return runWithClient(reportId, input, includePrompt, mockClient, "MOCK");
+    }
+
+    public LlmDiagnosisResult runDashScope(Long reportId, boolean includePrompt) {
+        AgentReportDetailVO detail = diagnosisEvidenceService.getReport(reportId);
+        LlmDiagnosisInput input = buildInput(detail);
+        return runWithClient(reportId, input, includePrompt, dashScopeClient, "DASHSCOPE");
+    }
+
+    LlmDiagnosisResult runWithClient(Long reportId,
+                                     LlmDiagnosisInput input,
+                                     boolean includePrompt,
+                                     LlmDiagnosisClient client,
+                                     String provider) {
         LlmDiagnosisPrompt prompt = promptBuilder.build(input);
-        String rawResponse = mockClient.diagnose(prompt, input);
-        LlmDiagnosisParseResult parseResult = parser.parse(rawResponse);
+        LlmDiagnosisClientResult clientResult = client.diagnose(prompt, input);
 
         LlmDiagnosisResult result = new LlmDiagnosisResult();
         result.setReportId(reportId);
-        result.setRawResponse(rawResponse);
-        result.setParseErrors(parseResult.getErrors());
-        result.setParseWarnings(parseResult.getWarnings());
+        result.setProvider(firstNonBlank(clientResult.getProvider(), provider));
+        result.setModel(clientResult.getModel());
+        result.setRequestId(clientResult.getRequestId());
+        result.setLatencyMs(clientResult.getLatencyMs());
+        result.setRawResponse(clientResult.getRawContent());
+        result.setAttempts(clientResult.getAttempts());
         result.setPrompt(includePrompt ? prompt : null);
 
-        if (!parseResult.isSuccess()) {
+        if (!clientResult.isSuccess()) {
+            LlmDiagnosisValidationResult validation = LlmDiagnosisValidationResult.ok();
+            validation.error(firstNonBlank(clientResult.getErrorMessage(), "LLM client failed"));
+            result.setValidation(validation);
             result.setSuccess(false);
             result.setFallbackUsed(true);
+            result.setFallbackReason(clientResult.getErrorCode());
+            result.setFallbackSummary(fallbackSummary(input));
+            result.setClientErrorCode(clientResult.getErrorCode());
+            result.setClientErrorMessage(clientResult.getErrorMessage());
+            return result;
+        }
+
+        LlmDiagnosisParseResult parseResult = parser.parse(clientResult.getRawContent());
+        result.setParseErrors(parseResult.getErrors());
+        result.setParseWarnings(parseResult.getWarnings());
+        if (!parseResult.isSuccess()) {
+            LlmDiagnosisValidationResult validation = LlmDiagnosisValidationResult.ok();
+            validation.error("LLM parse failed: " + String.join("; ", parseResult.getErrors()));
+            result.setValidation(validation);
+            result.setSuccess(false);
+            result.setFallbackUsed(true);
+            result.setFallbackReason("LLM_PARSE_FAILED");
             result.setFallbackSummary(fallbackSummary(input));
             return result;
         }
@@ -61,6 +100,7 @@ public class LlmDiagnosisOrchestrator {
         result.setSuccess(validation.isSuccess());
         result.setFallbackUsed(!validation.isSuccess());
         if (!validation.isSuccess()) {
+            result.setFallbackReason("LLM_VALIDATION_FAILED");
             result.setFallbackSummary(fallbackSummary(input));
         }
         return result;
@@ -92,7 +132,7 @@ public class LlmDiagnosisOrchestrator {
         input.setEvidenceGroups(buildEvidenceGroups(detail.getEvidenceItems()));
         input.setToolSummaries(buildToolSummaries(detail.getToolCallTraces(), detail.getEvidenceItems()));
         input.setConstraints(List.of(
-                "No real LLM or external API call is allowed in this mode.",
+                "LLM must not call tools or external factual systems; only the backend may call DashScope for JSON generation.",
                 "riskLevel must remain equal to deterministicDiagnosis.riskLevel.",
                 "Use only supplied evidenceRef values.",
                 "Development simulation must not be described as production incident."

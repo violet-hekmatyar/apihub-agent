@@ -6,7 +6,9 @@ import java.util.List;
 public class LlmDiagnosisResult {
 
     private boolean success;
+    private String provider;
     private boolean fallbackUsed;
+    private String fallbackReason;
     private Long reportId;
     private LlmDiagnosisPrompt prompt;
     private String rawResponse;
@@ -15,6 +17,12 @@ public class LlmDiagnosisResult {
     private List<String> parseErrors = new ArrayList<>();
     private List<String> parseWarnings = new ArrayList<>();
     private String fallbackSummary;
+    private String model;
+    private String requestId;
+    private Long latencyMs;
+    private String clientErrorCode;
+    private String clientErrorMessage;
+    private List<LlmDiagnosisAttempt> attempts = new ArrayList<>();
 
     public boolean isSuccess() {
         return success;
@@ -24,12 +32,28 @@ public class LlmDiagnosisResult {
         this.success = success;
     }
 
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
+
     public boolean isFallbackUsed() {
         return fallbackUsed;
     }
 
     public void setFallbackUsed(boolean fallbackUsed) {
         this.fallbackUsed = fallbackUsed;
+    }
+
+    public String getFallbackReason() {
+        return fallbackReason;
+    }
+
+    public void setFallbackReason(String fallbackReason) {
+        this.fallbackReason = fallbackReason;
     }
 
     public Long getReportId() {
@@ -94,5 +118,53 @@ public class LlmDiagnosisResult {
 
     public void setFallbackSummary(String fallbackSummary) {
         this.fallbackSummary = fallbackSummary;
+    }
+
+    public String getModel() {
+        return model;
+    }
+
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
+    }
+
+    public Long getLatencyMs() {
+        return latencyMs;
+    }
+
+    public void setLatencyMs(Long latencyMs) {
+        this.latencyMs = latencyMs;
+    }
+
+    public String getClientErrorCode() {
+        return clientErrorCode;
+    }
+
+    public void setClientErrorCode(String clientErrorCode) {
+        this.clientErrorCode = clientErrorCode;
+    }
+
+    public String getClientErrorMessage() {
+        return clientErrorMessage;
+    }
+
+    public void setClientErrorMessage(String clientErrorMessage) {
+        this.clientErrorMessage = clientErrorMessage;
+    }
+
+    public List<LlmDiagnosisAttempt> getAttempts() {
+        return attempts;
+    }
+
+    public void setAttempts(List<LlmDiagnosisAttempt> attempts) {
+        this.attempts = attempts == null ? new ArrayList<>() : attempts;
     }
 }

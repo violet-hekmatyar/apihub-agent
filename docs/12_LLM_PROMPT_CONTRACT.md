@@ -776,3 +776,54 @@ Boundary:
 - `riskLevel` must match the deterministic report risk level.
 - Evidence references must match generated `evidenceRef` values such as `API_CALL_STAT#1`.
 - Normal baseline wording is guarded against abnormal/incident phrasing.
+
+---
+
+## 20. Implementation Status - DashScope LLM Diagnosis v1
+
+Implemented on branch `feat/dashscope-llm-diagnosis-v1` as a provider extension over the existing PromptBuilder / Parser / Validator flow.
+
+Code:
+
+```text
+apihub-server/src/main/java/com/apihub/agent/dev/llm/DashScopeLlmDiagnosisClient.java
+apihub-server/src/main/java/com/apihub/agent/dev/llm/DashScopeLlmPropertiesResolver.java
+apihub-server/src/main/java/com/apihub/agent/dev/llm/LlmDiagnosisClient.java
+```
+
+Runtime flow:
+
+```text
+deterministic report/evidence/tool_trace
+-> LlmDiagnosisInput
+-> LlmDiagnosisPromptBuilder
+-> DashScopeLlmDiagnosisClient
+-> LlmDiagnosisOutputParser
+-> LlmDiagnosisValidator
+-> fallback-aware LlmDiagnosisResult
+```
+
+Endpoint:
+
+```http
+POST /api/dev/agent/diagnose/llm/dashscope
+```
+
+DashScope request format:
+
+```text
+OpenAI-compatible chat/completions
+model=qwen-plus by default
+messages=[system,user]
+temperature=0.1 by default
+response_format={"type":"json_object"} by default
+```
+
+Boundaries:
+
+- Still not Function Calling, ReAct, autonomous Tool Calling, Multi-Agent, RAG, Milvus, auto-fix, or notification.
+- DashScope only generates `LlmDiagnosisOutput` JSON from the supplied prompt.
+- Parser and Validator remain authoritative after the provider response.
+- Failure, invalid JSON, validation failure, or missing configuration falls back to deterministic diagnosis.
+- No LLM result persistence and no database schema change are introduced.
+- API key is read from configuration only and must not be logged, returned, documented, or committed.

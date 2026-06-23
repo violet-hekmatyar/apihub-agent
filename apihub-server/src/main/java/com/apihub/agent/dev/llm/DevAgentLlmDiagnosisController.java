@@ -24,6 +24,13 @@ public class DevAgentLlmDiagnosisController {
         return ResultUtils.success(orchestrator.runMock(reportId, includePrompt));
     }
 
+    @PostMapping("/dashscope")
+    public BaseResponse<LlmDiagnosisResult> runDashScope(@RequestBody LlmDiagnosisMockRequest request) {
+        Long reportId = request == null ? null : request.getReportId();
+        boolean includePrompt = request != null && Boolean.TRUE.equals(request.getIncludePrompt());
+        return ResultUtils.success(orchestrator.runDashScope(reportId, includePrompt));
+    }
+
     public static class LlmDiagnosisMockRequest {
         private Long reportId;
         private Boolean includePrompt;

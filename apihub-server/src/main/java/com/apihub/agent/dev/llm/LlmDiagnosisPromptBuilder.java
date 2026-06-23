@@ -49,7 +49,11 @@ public class LlmDiagnosisPromptBuilder {
                 Reference evidence only by existing evidenceRef values.
                 If evidence is insufficient, state the insufficiency instead of guessing.
                 This is a development simulation. Do not describe it as a real production incident.
-                For NORMAL baseline scenarios, avoid abnormal wording such as outage, incident, failure spike, or rate-limit anomaly.
+                Use this exact simulationBoundaryStatement:
+                "This diagnosis is based on development simulation only; no live-user impact was observed."
+                For NORMAL scenarios:
+                - Do not use outage, incident, failure spike, or rate-limit anomaly in executiveSummary, technicalSummary, rootCause, impactScope, recommendations, or evidenceUsage.
+                - Keep NORMAL summaries positive and quiet, such as stable baseline behavior, observed values within expected range, and no action beyond routine observation.
                 """;
     }
 

@@ -660,3 +660,37 @@ Boundary:
 - The smoke reuses an existing deterministic diagnosis report.
 - It does not run traffic generation or long pilot scenarios.
 - It does not call DashScope, OpenAI, or any external LLM API.
+
+## DashScope LLM Diagnosis Smoke
+
+Run after `apihub-server` has the latest code deployed on port 8080:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-dashscope-llm-diagnosis-smoke.ps1 -IncludePrompt
+```
+
+To target a specific deterministic diagnosis report:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-dashscope-llm-diagnosis-smoke.ps1 -ReportId 16059 -IncludePrompt
+```
+
+The script reads `D:\apihub-agent-dev\docker\.env` into the current PowerShell process but does not print `DASHSCOPE_API_KEY`.
+
+Verified endpoints:
+
+```text
+GET  /api/health
+GET  /api/dev/agent/reports?pageNo=1&pageSize=1
+POST /api/dev/agent/diagnose/llm/dashscope
+```
+
+Expected normal result:
+
+- `data.provider=DASHSCOPE`
+- `data.fallbackUsed=false`
+- `data.validation.success=true`
+- `data.output.riskLevel` exists
+- response must not contain the API key
+
+If DashScope returns invalid JSON or violates validation rules, the endpoint returns a fallback-aware result with `fallbackUsed=true`; the smoke marks that as FAIL so the prompt/client can be tuned.

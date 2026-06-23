@@ -261,3 +261,48 @@ deterministic report/evidence/tool_trace
 ```
 
 This stage proves prompt construction, structured JSON parsing, evidence reference validation, risk-level preservation, normal wording guardrails, and local fallback behavior before any DashScope client is added.
+
+---
+
+## 11. Implementation Status - DashScope LLM Diagnosis v1
+
+DashScope LLM Diagnosis v1 has been added as the first real provider path after the local mock stage.
+
+Entry points:
+
+```text
+POST /api/dev/agent/diagnose/llm/mock
+POST /api/dev/agent/diagnose/llm/dashscope
+```
+
+Configuration:
+
+```text
+DASHSCOPE_API_KEY
+AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+AI_CHAT_MODEL=qwen-plus
+AI_LLM_TIMEOUT_SECONDS=60
+AI_LLM_TEMPERATURE=0.1
+```
+
+The backend first reads Spring/process/system configuration and can fall back to the local dev `docker/.env` file. The API key is not printed or returned.
+
+Optional proxy fallback configuration:
+
+```text
+AI_LLM_PROXY_ENABLED=true|false
+AI_LLM_PROXY_HOST=127.0.0.1
+AI_LLM_PROXY_PORT=10808
+AI_LLM_PROXY_SCHEME=http
+AI_LLM_PROXY_FALLBACK_ENABLED=true|false
+AI_LLM_DIRECT_RETRY_COUNT=2
+```
+
+Proxy fallback is never the first attempt. The DashScope client tries direct calls first, retries direct calls for retryable network / 429 / 5xx failures, then uses the configured proxy at most once as a last fallback. These values are read from Spring/process/system configuration or `docker/.env` if present; the application does not write them into `docker/.env`.
+
+Readiness boundary remains:
+
+```text
+DashScope is a structured JSON report generator over deterministic evidence.
+It is not the source of facts, not a risk-level authority, and not an autonomous tool caller.
+```
