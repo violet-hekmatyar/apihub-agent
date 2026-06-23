@@ -739,3 +739,40 @@ Prompt 输出质量检查
 ```text
 展示 deterministic diagnosis、LLM diagnosis、evidence chain、tool trace、HTML/PDF 导出。
 ```
+
+---
+
+## 19. Implementation Status - PromptBuilder + Parser + Mock Client v1
+
+Implemented on branch `feat/llm-prompt-builder-v1` without real LLM calls:
+
+```text
+apihub-server/src/main/java/com/apihub/agent/dev/llm/
+```
+
+Implemented local loop:
+
+```text
+Agent report detail
+-> LlmDiagnosisInput
+-> LlmDiagnosisPromptBuilder
+-> MockLlmDiagnosisClient
+-> LlmDiagnosisOutputParser
+-> LlmDiagnosisValidator
+-> fallback-aware LlmDiagnosisResult
+```
+
+Dev endpoint:
+
+```http
+POST /api/dev/agent/diagnose/llm/mock
+```
+
+Boundary:
+
+- No DashScope, OpenAI, or external LLM API is called.
+- No schema change and no LLM result persistence is introduced.
+- `riskLevelChanged=false` is enforced.
+- `riskLevel` must match the deterministic report risk level.
+- Evidence references must match generated `evidenceRef` values such as `API_CALL_STAT#1`.
+- Normal baseline wording is guarded against abnormal/incident phrasing.

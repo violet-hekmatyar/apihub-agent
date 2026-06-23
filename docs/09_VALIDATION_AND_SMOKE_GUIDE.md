@@ -623,3 +623,40 @@ D:\tmp\apihub-agent-normal-baseline-test\output\run-<timestamp>
 ```
 
 The summary markdown records riskLevel, alert count, reportId, HTML path, PDF path, and raw JSON path.
+
+## LLM Prompt Builder Mock Smoke
+
+Run after `apihub-server` has the latest code deployed on port 8080:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-llm-prompt-builder-mock-smoke.ps1 -IncludePrompt
+```
+
+To target a specific deterministic diagnosis report:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-llm-prompt-builder-mock-smoke.ps1 -ReportId 16051 -IncludePrompt
+```
+
+The smoke verifies:
+
+```text
+GET  /api/health
+GET  /api/dev/agent/reports?pageNo=1&pageSize=1
+POST /api/dev/agent/diagnose/llm/mock
+```
+
+Expected result:
+
+- `data.success=true`
+- `data.fallbackUsed=false`
+- `data.validation.success=true`
+- `data.output.riskLevel` exists
+- `data.rawResponse` exists
+- `data.prompt.inputJson` exists when `-IncludePrompt` is used
+
+Boundary:
+
+- The smoke reuses an existing deterministic diagnosis report.
+- It does not run traffic generation or long pilot scenarios.
+- It does not call DashScope, OpenAI, or any external LLM API.

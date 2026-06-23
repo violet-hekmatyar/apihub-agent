@@ -229,3 +229,35 @@ ReAct Agent
 ```
 
 每一步都应保留确定性诊断作为 fallback。LLM 层只增强表达和报告质量，不替代事实采集与规则诊断。
+
+---
+
+## 10. Implementation Status - PromptBuilder + Parser + Mock Client v1
+
+Status: implemented locally, still no real LLM integration.
+
+Code:
+
+```text
+apihub-server/src/main/java/com/apihub/agent/dev/llm/
+```
+
+Tests:
+
+```text
+apihub-server/src/test/java/com/apihub/agent/dev/llm/LlmDiagnosisCoreTest.java
+```
+
+Implemented readiness checkpoint:
+
+```text
+deterministic report/evidence/tool_trace
+-> LlmDiagnosisInput
+-> PromptBuilder
+-> MockLlmDiagnosisClient
+-> Parser
+-> Validator
+-> deterministic fallback if parse/validation fails
+```
+
+This stage proves prompt construction, structured JSON parsing, evidence reference validation, risk-level preservation, normal wording guardrails, and local fallback behavior before any DashScope client is added.
