@@ -12,6 +12,9 @@ DROP TABLE IF EXISTS agent_report;
 DROP TABLE IF EXISTS tool_call_trace;
 DROP TABLE IF EXISTS agent_message;
 DROP TABLE IF EXISTS agent_session;
+DROP TABLE IF EXISTS mock_campus_api_request_log;
+DROP TABLE IF EXISTS mock_scenario_client_request_log;
+DROP TABLE IF EXISTS mock_scenario_run;
 DROP TABLE IF EXISTS rag_chunk_meta;
 DROP TABLE IF EXISTS rag_document;
 DROP TABLE IF EXISTS event_api_relation;
@@ -258,6 +261,82 @@ CREATE TABLE scenario_call_sample (
   CONSTRAINT fk_scenario_call_sample_run FOREIGN KEY (scenario_run_id) REFERENCES scenario_run (scenario_run_id),
   CONSTRAINT fk_scenario_call_sample_gateway_log FOREIGN KEY (gateway_log_id) REFERENCES gateway_log (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Small sampled calls for Scenario Runner runs';
+
+CREATE TABLE mock_scenario_run (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Mock scenario run ID',
+  scenario_run_id VARCHAR(96) NOT NULL COMMENT 'External run ID',
+  profile_code VARCHAR(64) NOT NULL COMMENT 'Scenario profile code',
+  mode VARCHAR(32) NOT NULL COMMENT 'FAST_DEMO / NORMAL_DEMO',
+  status VARCHAR(32) NOT NULL COMMENT 'RUNNING / COMPLETED / FAILED / STOPPED',
+  target_gateway_base_url VARCHAR(255) NOT NULL COMMENT 'Target API-HUB Gateway base URL',
+  duration_seconds INT NOT NULL COMMENT 'Scenario duration seconds',
+  random_seed BIGINT NULL DEFAULT NULL COMMENT 'Random seed',
+  rps_scale DECIMAL(10,2) NOT NULL DEFAULT 1.00 COMMENT 'RPS scale factor',
+  start_time DATETIME NULL DEFAULT NULL COMMENT 'Start time',
+  end_time DATETIME NULL DEFAULT NULL COMMENT 'End time',
+  total_request_count INT NOT NULL DEFAULT 0 COMMENT 'Total sender requests',
+  success_count INT NOT NULL DEFAULT 0 COMMENT 'Sender success count',
+  fail_count INT NOT NULL DEFAULT 0 COMMENT 'Sender fail count',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_scenario_run_id (scenario_run_id),
+  KEY idx_profile_mode (profile_code, mode),
+  KEY idx_status (status),
+  KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Mock Scenario Client run state';
+
+CREATE TABLE mock_scenario_client_request_log (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Mock sender request log ID',
+  scenario_run_id VARCHAR(96) NOT NULL COMMENT 'External run ID',
+  request_id VARCHAR(96) NOT NULL COMMENT 'Sender request ID',
+  trace_id VARCHAR(96) NULL DEFAULT NULL COMMENT 'Gateway trace ID',
+  profile_code VARCHAR(64) NOT NULL COMMENT 'Scenario profile code',
+  mode VARCHAR(32) NOT NULL COMMENT 'FAST_DEMO / NORMAL_DEMO',
+  phase_code VARCHAR(64) NOT NULL COMMENT 'Scenario phase code',
+  api_code VARCHAR(64) NOT NULL COMMENT 'Target API code',
+  caller_app_code VARCHAR(64) NOT NULL COMMENT 'Caller app code',
+  mock_scenario VARCHAR(64) NOT NULL COMMENT 'Mock scenario',
+  target_gateway_url VARCHAR(255) NOT NULL COMMENT 'Gateway invoke URL',
+  send_time DATETIME NOT NULL COMMENT 'Send time',
+  gateway_response_status INT NULL DEFAULT NULL COMMENT 'Gateway HTTP status',
+  gateway_response_code VARCHAR(64) NULL DEFAULT NULL COMMENT 'Gateway/upstream business code',
+  gateway_latency_ms INT NULL DEFAULT NULL COMMENT 'Gateway latency milliseconds',
+  success TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Whether sender received success',
+  error_message VARCHAR(512) NULL DEFAULT NULL COMMENT 'Sender-side error message',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  PRIMARY KEY (id),
+  KEY idx_scenario_run_id (scenario_run_id),
+  KEY idx_request_id (request_id),
+  KEY idx_phase_api (scenario_run_id, phase_code, api_code),
+  KEY idx_mock_scenario (scenario_run_id, mock_scenario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Mock Scenario Client per-request log';
+
+CREATE TABLE mock_campus_api_request_log (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Mock upstream request log ID',
+  scenario_run_id VARCHAR(96) NOT NULL COMMENT 'External run ID',
+  request_id VARCHAR(96) NOT NULL COMMENT 'Request ID',
+  trace_id VARCHAR(96) NULL DEFAULT NULL COMMENT 'Trace ID',
+  phase_code VARCHAR(64) NOT NULL COMMENT 'Scenario phase code',
+  api_code VARCHAR(64) NOT NULL COMMENT 'API code',
+  mock_scenario VARCHAR(64) NOT NULL COMMENT 'Mock scenario',
+  receive_time DATETIME NOT NULL COMMENT 'Receive time',
+  response_status INT NOT NULL COMMENT 'Returned HTTP status',
+  business_code VARCHAR(64) NULL DEFAULT NULL COMMENT 'Business response code',
+  latency_ms INT NULL DEFAULT NULL COMMENT 'Mock latency milliseconds',
+  response_type VARCHAR(64) NOT NULL COMMENT 'NORMAL / AUTH / RATE_LIMIT / TIMEOUT / SERVER_ERROR',
+  failure_source VARCHAR(32) NOT NULL DEFAULT 'NONE' COMMENT 'NONE / GATEWAY / UPSTREAM / CALLER',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  PRIMARY KEY (id),
+  KEY idx_scenario_run_id (scenario_run_id),
+  KEY idx_request_id (request_id),
+  KEY idx_phase_api (scenario_run_id, phase_code, api_code),
+  KEY idx_response_status (scenario_run_id, response_status),
+  KEY idx_failure_source (scenario_run_id, failure_source)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Mock Campus API upstream request log';
 
 CREATE TABLE alert_event (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Alert event ID',

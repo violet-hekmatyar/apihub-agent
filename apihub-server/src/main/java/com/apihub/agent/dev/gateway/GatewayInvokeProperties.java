@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "apihub.mock-provider")
 public class GatewayInvokeProperties {
 
-    private String baseUrl = "http://localhost:8090";
+    private String baseUrl = "http://localhost:8091";
 
     public String getBaseUrl() {
         return baseUrl;

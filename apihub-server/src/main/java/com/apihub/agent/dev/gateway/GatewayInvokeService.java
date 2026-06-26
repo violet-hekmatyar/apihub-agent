@@ -116,7 +116,7 @@ public class GatewayInvokeService {
     private UpstreamResponse callMockProvider(GatewayInvokeRoute route, GatewayInvokeRequest request,
                                               String mockScenario, String traceId, String requestId, int timeoutMs) {
         try {
-            String url = buildUrl(route, request, mockScenario);
+            String url = properties.getBaseUrl().replaceAll("/+$", "") + "/api/mock-campus/invoke";
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofMillis(timeoutMs))
@@ -125,14 +125,9 @@ public class GatewayInvokeService {
                     .header("X-Request-Id", requestId)
                     .header("X-Mock-Scenario", mockScenario);
 
-            if ("POST".equals(route.method())) {
-                Map<String, Object> body = new LinkedHashMap<>(safeMap(request.getBody()));
-                body.putIfAbsent("mockScenario", mockScenario);
-                builder.header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(toJson(body)));
-            } else {
-                builder.GET();
-            }
+            Map<String, Object> body = buildMockCampusBody(route, request, mockScenario, traceId, requestId);
+            builder.header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(toJson(body)));
 
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
             Map<String, Object> responseBody = parseJsonMap(response.body());
@@ -146,6 +141,26 @@ public class GatewayInvokeService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "mock-provider call failed: " + e.getMessage());
         }
+    }
+
+    private Map<String, Object> buildMockCampusBody(GatewayInvokeRoute route, GatewayInvokeRequest request,
+                                                    String mockScenario, String traceId, String requestId) {
+        GatewayInvokeRequest.ScenarioContext context = request.getScenarioContext();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("queryParams", safeMap(request.getQueryParams()));
+        payload.put("body", safeMap(request.getBody()));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("scenarioRunId", context == null ? null : context.getScenarioRunId());
+        body.put("requestId", requestId);
+        body.put("traceId", traceId);
+        body.put("profileCode", context == null ? null : context.getScenarioId());
+        body.put("mode", context == null ? null : context.getScenarioKey());
+        body.put("phaseCode", context == null ? null : context.getPhase());
+        body.put("apiCode", route.apiCode());
+        body.put("callerAppCode", request.getAppCode());
+        body.put("mockScenario", mockScenario);
+        body.put("payload", payload);
+        return body;
     }
 
     private String buildUrl(GatewayInvokeRoute route, GatewayInvokeRequest request, String mockScenario) {
@@ -222,7 +237,8 @@ public class GatewayInvokeService {
         extra.put("upstreamCode", upstream.bodyCode());
         extra.put("upstreamMessage", upstream.bodyMessage());
         extra.put("upstreamDataSummary", summarize(upstream.bodyData()));
-        extra.put("targetProvider", "apihub-mock-provider");
+        extra.put("failureSource", upstream.statusCode() >= 200 && upstream.statusCode() < 300 ? "NONE" : "UPSTREAM");
+        extra.put("targetProvider", "apihub-mock-campus-api");
         extra.put("clientUserAgent", request.getClientInfo() == null ? null : request.getClientInfo().getUserAgent());
         extra.put("queryParams", maskMap(request.getQueryParams()));
         extra.put("requestBodySummary", summarize(maskMap(request.getBody())));
