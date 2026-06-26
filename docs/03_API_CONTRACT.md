@@ -1436,4 +1436,53 @@ SSE 中禁止输出：
 ```plain
 03 只关心前后端交互契约，不直接定义数据库和 Agent Tool 内部实现。
 ```
+## Mock Scenario Runner v1 API
 
+### 8090 Scenario Client
+
+- `GET /api/mock/health`
+- `GET /api/mock/scenario-profiles`
+- `POST /api/mock/scenario-runs`
+- `GET /api/mock/scenario-runs/{scenarioRunId}`
+- `POST /api/mock/scenario-runs/{scenarioRunId}/stop`
+- `GET /api/mock/scenario-runs/{scenarioRunId}/sender-summary`
+- `GET /api/mock/scenario-runs/{scenarioRunId}/reconciliation-summary`
+
+Start request:
+
+```json
+{
+  "profileCode": "LECTURE_REGISTRATION_PEAK",
+  "mode": "FAST_DEMO",
+  "targetGatewayBaseUrl": "http://localhost:8080",
+  "randomSeed": 20260626,
+  "rpsScale": 1.0,
+  "includeTrafficSamples": true
+}
+```
+
+### 8091 Mock Campus API
+
+- `GET /api/mock-campus/health`
+- `POST /api/mock-campus/invoke`
+- `GET /api/mock-campus/scenario-runs/{scenarioRunId}/upstream-summary`
+
+`mockScenario` to HTTP status mapping:
+
+| mockScenario | HTTP |
+|---|---:|
+| NORMAL | 200 |
+| TOKEN_EXPIRED | 401 |
+| SIGNATURE_MISMATCH | 403 |
+| RATE_LIMITED | 429 |
+| DUPLICATE_REQUEST | 409 |
+| SOLD_OUT | 409 |
+| DOWNSTREAM_TIMEOUT | 504 |
+| COURSE_SYSTEM_TIMEOUT | 504 |
+| UPSTREAM_INTERNAL_ERROR | 500 |
+
+### 8080 Gateway Summary
+
+- `GET /api/dev/gateway/scenario-runs/{scenarioRunId}/gateway-summary`
+
+This endpoint reads `gateway_log.extra_info.scenarioRunId` and returns Gateway-side counts for reconciliation.

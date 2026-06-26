@@ -1584,3 +1584,64 @@ Indexes:
 - `scenario_call_sample`: small sampled rows for inspection; it does not replace `gateway_log`.
 - `api_call_stat_hourly`: still populated later by Stats Aggregator from `gateway_log`.
 - `alert_event`: still populated later by Alert Evaluator.
+## Mock Scenario Runner v1 Tables
+
+### mock_scenario_run
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| id | BIGINT | Yes | auto | Primary key |
+| scenario_run_id | VARCHAR(96) | Yes | - | External run ID, unique |
+| profile_code | VARCHAR(64) | Yes | - | Scenario profile code |
+| mode | VARCHAR(32) | Yes | - | FAST_DEMO / NORMAL_DEMO |
+| status | VARCHAR(32) | Yes | - | RUNNING / COMPLETED / FAILED / STOPPED |
+| target_gateway_base_url | VARCHAR(255) | Yes | - | Target 8080 Gateway base URL |
+| duration_seconds | INT | Yes | - | Planned duration |
+| random_seed | BIGINT | No | NULL | Repeatable random seed |
+| rps_scale | DECIMAL(10,2) | Yes | 1.00 | RPS scale |
+| start_time / end_time | DATETIME | No | NULL | Run timestamps |
+| total_request_count / success_count / fail_count | INT | Yes | 0 | Sender counters |
+| extra_json | JSON | No | NULL | Extension fields |
+
+Indexes: `uk_scenario_run_id`, `idx_profile_mode`, `idx_status`, `idx_created_at`.
+
+Example: `mock_lecture_registration_peak_xxx`, profile `LECTURE_REGISTRATION_PEAK`, mode `FAST_DEMO`, duration `300`.
+
+### mock_scenario_client_request_log
+
+Records every request sent by 8090.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| scenario_run_id | VARCHAR(96) | Yes | - | Run ID |
+| request_id | VARCHAR(96) | Yes | - | Sender request ID |
+| trace_id | VARCHAR(96) | No | NULL | Gateway trace ID |
+| profile_code / mode / phase_code | VARCHAR | Yes | - | Scenario context |
+| api_code / caller_app_code / mock_scenario | VARCHAR | Yes | - | Target API and scenario |
+| target_gateway_url | VARCHAR(255) | Yes | - | Gateway invoke URL |
+| send_time | DATETIME | Yes | - | Send time |
+| gateway_response_status / gateway_response_code | INT / VARCHAR | No | NULL | Gateway result |
+| gateway_latency_ms | INT | No | NULL | Sender observed latency |
+| success | TINYINT(1) | Yes | 0 | Sender success flag |
+| error_message | VARCHAR(512) | No | NULL | Sender error |
+| extra_json | JSON | No | NULL | Extension fields |
+
+Indexes: `idx_scenario_run_id`, `idx_request_id`, `idx_phase_api`, `idx_mock_scenario`.
+
+### mock_campus_api_request_log
+
+Records requests actually received by 8091.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| scenario_run_id / request_id / trace_id | VARCHAR | Yes/No | - | Correlation IDs |
+| phase_code / api_code / mock_scenario | VARCHAR | Yes | - | Scenario context |
+| receive_time | DATETIME | Yes | - | Upstream receive time |
+| response_status | INT | Yes | - | Returned HTTP status |
+| business_code | VARCHAR(64) | No | NULL | Business response code |
+| latency_ms | INT | No | NULL | Mock latency |
+| response_type | VARCHAR(64) | Yes | - | NORMAL / AUTH / RATE_LIMIT / TIMEOUT / SERVER_ERROR |
+| failure_source | VARCHAR(32) | Yes | NONE | NONE / GATEWAY / UPSTREAM / CALLER |
+| extra_json | JSON | No | NULL | Extension fields |
+
+Indexes: `idx_scenario_run_id`, `idx_request_id`, `idx_phase_api`, `idx_response_status`, `idx_failure_source`.

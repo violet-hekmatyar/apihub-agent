@@ -246,3 +246,9 @@ RAG / Milvus
 frontend workbench
 Function Calling / ReAct / Multi-Agent
 ```
+## Mock Scenario Runner v1 Updates
+
+- `docs/07_MOCK_PROVIDER_AND_TRAFFIC_SIMULATION.md`: documents the 8090 Scenario Client, 8091 Mock Campus API, 8080 Gateway data plane, profiles, phase design, and reconciliation boundary.
+- `docs/01_DB_SCHEMA.md`: documents `mock_scenario_run`, `mock_scenario_client_request_log`, and `mock_campus_api_request_log`.
+- `docs/03_API_CONTRACT.md`: documents Scenario Client APIs, Mock Campus APIs, and Gateway scenario summary.
+- `docs/09_VALIDATION_AND_SMOKE_GUIDE.md`: documents `scripts/check-mock-scenario-runner-smoke.ps1` and the default / optional smoke flow.
