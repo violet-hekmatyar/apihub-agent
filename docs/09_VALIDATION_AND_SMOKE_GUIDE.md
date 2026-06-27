@@ -728,3 +728,44 @@ Expected checks:
 - `LECTURE_REGISTRATION_PEAK` Phase C has increased `AUTH_LOGIN` weight and `LECTURE_REGISTER` remains dominant
 - failure rate is intentionally lower than earlier stress-style demos
 - Gateway logs contain `scenarioRunId` in `extra_info`
+
+## Adaptive Passive Alert Monitor v1 Smoke
+
+Script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1
+```
+
+Default mode checks:
+
+- 8080 / 8090 / 8091 health.
+- `GET /api/dev/passive-monitor/status`.
+- `POST /api/dev/passive-monitor/config`.
+- `POST /api/dev/passive-monitor/start`.
+- recent event query.
+- `POST /api/dev/passive-monitor/stop`.
+
+Default mode does not run a five-minute lecture scenario and does not call DashScope or require an API key.
+
+Optional scenario validation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunLecture -SkipWaitClose
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunAuth -SkipWaitClose
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunTimeout -SkipWaitClose
+```
+
+Expected mappings:
+
+- `LECTURE_REGISTRATION_PEAK / FAST_DEMO`: `HIGH_RATE_LIMIT`, `HIGH_ERROR_RATE`, or `TRAFFIC_SPIKE`.
+- `AUTH_FAILURE_LOCALIZED / FAST_DEMO`: `AUTH_FAILURE_SPIKE` or `HIGH_ERROR_RATE`.
+- `DOWNSTREAM_TIMEOUT_DEGRADATION / FAST_DEMO`: `HIGH_5XX_RATE`, `HIGH_ERROR_RATE`, or `HIGH_LATENCY`.
+
+Close check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunCloseCheck
+```
+
+`close-check` only evaluates the quiet-period rule. It does not force events closed. Production can later run the same logic from a scheduler or async worker.

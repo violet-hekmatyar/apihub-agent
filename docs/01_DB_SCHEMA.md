@@ -1645,3 +1645,59 @@ Records requests actually received by 8091.
 | extra_json | JSON | No | NULL | Extension fields |
 
 Indexes: `idx_scenario_run_id`, `idx_request_id`, `idx_phase_api`, `idx_response_status`, `idx_failure_source`.
+
+## Adaptive Passive Alert Monitor v1 Tables
+
+### passive_monitor_event
+
+Purpose: stores the lifecycle of passive monitor events created from Gateway request-completion signals. It is not a replacement for `gateway_log`; it stores alert-level summaries and state.
+
+Key fields:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| monitor_event_id | VARCHAR(96) | External event ID |
+| alert_event_id | BIGINT | Optional linked `alert_event.id` |
+| alert_type | VARCHAR(64) | HIGH_ERROR_RATE / HIGH_RATE_LIMIT / AUTH_FAILURE_SPIKE / HIGH_5XX_RATE / TRAFFIC_SPIKE / HIGH_LATENCY |
+| risk_level | VARCHAR(32) | WARNING / CRITICAL |
+| event_status | VARCHAR(32) | FIRING / COOLDOWN / RESOLVED |
+| api_code / caller_app_code | VARCHAR | Grouping dimensions |
+| dedup_key | VARCHAR(192) | `apiCode + alertType + callerAppCode` |
+| first_trigger_time / last_trigger_time / resolved_time | DATETIME | Lifecycle timestamps |
+| window_start_time / window_end_time | DATETIME | Latest trigger window |
+| context_start_time / context_end_time | DATETIME | Baseline/context window |
+| request_count / error_count / rate fields | INT / DECIMAL | Latest window metrics |
+| p95_latency_ms | INT | Latest window p95 |
+| cooldown_until | DATETIME | Runtime cooldown boundary |
+| extra_json | JSON | Threshold, evidence and MQ-reserve notes |
+
+Indexes: `uk_monitor_event_id`, `idx_dedup_status`, `idx_api_time`, `idx_status_time`, `idx_alert_type_time`.
+
+### passive_alert_snapshot
+
+Purpose: stores bounded metric snapshots for trigger/context/recovery/close summary. Full request replay remains in `gateway_log`.
+
+Snapshot types:
+
+```text
+TRIGGER_WINDOW
+CONTEXT_BEFORE
+RECOVERY_WINDOW
+CLOSE_SUMMARY
+```
+
+Key fields:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| snapshot_id | VARCHAR(96) | External snapshot ID |
+| monitor_event_id | VARCHAR(96) | Parent event ID |
+| snapshot_time / snapshot_type | DATETIME / VARCHAR | Snapshot metadata |
+| api_code / caller_app_code | VARCHAR | Dimensions |
+| window_start_time / window_end_time | DATETIME | Snapshot window |
+| request_count / success_count / error_count / error_rate | INT / DECIMAL | Snapshot metrics |
+| *_distribution_json | JSON | Status, business code, caller app distributions |
+| sample_request_ids_json | JSON | Bounded request ID sample |
+| threshold_snapshot_json | JSON | Rule threshold at trigger time |
+
+Indexes: `uk_snapshot_id`, `idx_monitor_event_id`, `idx_snapshot_type`, `idx_snapshot_time`.

@@ -375,3 +375,19 @@ The current deterministic diagnosis flow is validated with controlled traffic in
 For the current implementation, HTTP 409 is produced by Mock Provider business-conflict scenarios such as duplicate request or sold out. HTTP 429 is produced by Mock Provider RATE_LIMITED scenarios and then recorded by Gateway Invoke in gateway_log. Gateway Invoke currently records and proxies these statuses; it does not yet enforce an independent local rate-limit rule.
 
 Short-window alerts use real gateway_log aggregation: HIGH_FAILURE_RATE is triggered by failRate >= 0.10, and HIGH_RATE_LIMIT is triggered by rateLimitCount >= 5 or rateLimitRate >= 0.05. See `10_EXCEPTION_SOURCE_AUDIT.md` for the full audit.
+
+## Adaptive Passive Alert Monitor Boundary
+
+Adaptive Passive Alert Monitor v1 creates passive monitor facts from Gateway request-completion signals:
+
+```text
+Gateway Invoke
+-> gateway_log
+-> GatewayMonitoringSignal
+-> passive_monitor_event / passive_alert_snapshot
+-> optional alert_event link
+```
+
+`monitor_event` is a future Agent diagnosis entry point. A later Agent flow can accept `monitorEventId` or the linked `alert_event_id`, derive `apiCode` and the event window, then reuse existing tools such as `queryGatewayLogs`, `queryApiCallStats`, and `queryAlertEvents`.
+
+This monitor does not automatically call Agent, DashScope, LLM, ReAct, tools, auto-fix, or notification logic. It only creates observable facts and snapshots.
