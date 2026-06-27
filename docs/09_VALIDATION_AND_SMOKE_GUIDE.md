@@ -694,3 +694,78 @@ Expected normal result:
 - response must not contain the API key
 
 If DashScope returns invalid JSON or violates validation rules, the endpoint returns a fallback-aware result with `fallbackUsed=true`; the smoke marks that as FAIL so the prompt/client can be tuned.
+## Mock Scenario Runner v1 Smoke
+
+Start the three local services:
+
+```powershell
+java -jar apihub-server\target\apihub-agent-server-0.0.1-SNAPSHOT.jar
+java -jar apihub-mock-scenario-client\target\apihub-mock-scenario-client-0.0.1-SNAPSHOT.jar
+java -jar apihub-mock-campus-api\target\apihub-mock-campus-api-0.0.1-SNAPSHOT.jar
+```
+
+The 8080 server should use `APIHUB_MOCK_PROVIDER_BASE_URL=http://localhost:8091` or the default 8091 value.
+
+Run the default smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-mock-scenario-runner-smoke.ps1
+```
+
+The default smoke checks 8080 / 8090 / 8091 health, lists scenario profiles, runs `NORMAL_DAILY_INSPECTION / FAST_DEMO`, then checks sender summary, upstream summary, and reconciliation summary. It does not call DashScope and does not require an API key.
+
+Run the optional lecture peak smoke:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-mock-scenario-runner-smoke.ps1 -RunLecture
+```
+
+Expected checks:
+
+- `senderRequestCount > 0`
+- `upstreamReceivedCount > 0`
+- reconciliation `mismatchCount = 0`
+- `LECTURE_REGISTRATION_PEAK` Phase C has increased `AUTH_LOGIN` weight and `LECTURE_REGISTER` remains dominant
+- failure rate is intentionally lower than earlier stress-style demos
+- Gateway logs contain `scenarioRunId` in `extra_info`
+
+## Adaptive Passive Alert Monitor v1 Smoke
+
+Script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1
+```
+
+Default mode checks:
+
+- 8080 / 8090 / 8091 health.
+- `GET /api/dev/passive-monitor/status`.
+- `POST /api/dev/passive-monitor/config`.
+- `POST /api/dev/passive-monitor/start`.
+- recent event query.
+- `POST /api/dev/passive-monitor/stop`.
+
+Default mode does not run a five-minute lecture scenario and does not call DashScope or require an API key.
+
+Optional scenario validation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunLecture -SkipWaitClose
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunAuth -SkipWaitClose
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunTimeout -SkipWaitClose
+```
+
+Expected mappings:
+
+- `LECTURE_REGISTRATION_PEAK / FAST_DEMO`: `HIGH_RATE_LIMIT`, `HIGH_ERROR_RATE`, or `TRAFFIC_SPIKE`.
+- `AUTH_FAILURE_LOCALIZED / FAST_DEMO`: `AUTH_FAILURE_SPIKE` or `HIGH_ERROR_RATE`.
+- `DOWNSTREAM_TIMEOUT_DEGRADATION / FAST_DEMO`: `HIGH_5XX_RATE`, `HIGH_ERROR_RATE`, or `HIGH_LATENCY`.
+
+Close check:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-monitor-smoke.ps1 -RunCloseCheck
+```
+
+`close-check` only evaluates the quiet-period rule. It does not force events closed. Production can later run the same logic from a scheduler or async worker.

@@ -170,3 +170,41 @@ Scenario Runner 已作为造数入口稳定下来。后续重点不应继续堆�
 1. Stats Aggregator v1：从 `gateway_log` 聚合到 `api_call_stat_hourly`。
 2. Alert Evaluator v1：基于统计和规则生成 `alert_event`。
 3. Agent 诊断证据链：在统计和告警稳定后，再验证 `AUTH_LOGIN 403` 或 `LECTURE_REGISTER_PEAK` 的诊断闭环。
+## Mock Scenario Runner v1
+
+Mock Scenario Runner v1 splits the old mixed mock capability into two local modules plus the existing API-HUB Gateway:
+
+```text
+8090 apihub-mock-scenario-client
+-> 8080 apihub-server /api/dev/gateway/invoke
+-> 8091 apihub-mock-campus-api /api/mock-campus/invoke
+-> 8080 gateway_log / stats / alert / diagnosis
+-> 8090 sender and reconciliation summary
+```
+
+### Module Boundaries
+
+- `apihub-mock-scenario-client` on 8090 simulates callers such as students, campus mini apps, and third-party apps. It actively sends requests to Gateway and records sender-side logs in `mock_scenario_client_request_log`.
+- `apihub-mock-campus-api` on 8091 simulates upstream campus APIs. It receives Gateway-forwarded requests, returns business responses by `mockScenario`, and records upstream logs in `mock_campus_api_request_log`.
+- `apihub-server` on 8080 remains a passive Gateway and governance system. Agent diagnosis is still after-the-fact and never participates in synchronous request responses.
+
+### Profiles
+
+| profileCode | FAST_DEMO | NORMAL_DEMO | Intent |
+|---|---:|---:|---|
+| `NORMAL_DAILY_INSPECTION` | 60s | 300s | Normal daily baseline, low noise, should remain NORMAL. |
+| `LECTURE_REGISTRATION_PEAK` | 300s | 900s | Lecture signup warmup, peak, relief, and recovery. AUTH_LOGIN weight rises during peak. |
+| `AUTH_FAILURE_LOCALIZED` | 180s | 480s | Localized token/signature failure around AUTH_LOGIN. |
+| `DOWNSTREAM_TIMEOUT_DEGRADATION` | 180s | 600s | Timeout-oriented degradation around LIBRARY_BORROW. |
+
+The v1 lecture peak profile intentionally keeps the overall failure rate lower than the earlier 15-minute stress-style demo. Phase C concentrates `RATE_LIMITED`, `DUPLICATE_REQUEST`, and `SOLD_OUT` on `LECTURE_REGISTER`, while `AUTH_LOGIN` weight increases to reflect signup-driven login traffic.
+
+### Reconciliation
+
+The three-way reconciliation compares:
+
+- sender request/response counts from 8090;
+- Gateway received/forwarded counts from `gateway_log.extra_info.scenarioRunId`;
+- upstream received/error counts from 8091.
+
+v1 still allows some gateway-like mock scenarios such as 401/403/429 to be returned by 8091 when Gateway policy interception is not yet implemented. This is documented as a demo compromise; later versions can move those policies into Gateway.

@@ -1436,4 +1436,122 @@ SSE 中禁止输出：
 ```plain
 03 只关心前后端交互契约，不直接定义数据库和 Agent Tool 内部实现。
 ```
+## Mock Scenario Runner v1 API
 
+### 8090 Scenario Client
+
+- `GET /api/mock/health`
+- `GET /api/mock/scenario-profiles`
+- `POST /api/mock/scenario-runs`
+- `GET /api/mock/scenario-runs/{scenarioRunId}`
+- `POST /api/mock/scenario-runs/{scenarioRunId}/stop`
+- `GET /api/mock/scenario-runs/{scenarioRunId}/sender-summary`
+- `GET /api/mock/scenario-runs/{scenarioRunId}/reconciliation-summary`
+
+Start request:
+
+```json
+{
+  "profileCode": "LECTURE_REGISTRATION_PEAK",
+  "mode": "FAST_DEMO",
+  "targetGatewayBaseUrl": "http://localhost:8080",
+  "randomSeed": 20260626,
+  "rpsScale": 1.0,
+  "includeTrafficSamples": true
+}
+```
+
+### 8091 Mock Campus API
+
+- `GET /api/mock-campus/health`
+- `POST /api/mock-campus/invoke`
+- `GET /api/mock-campus/scenario-runs/{scenarioRunId}/upstream-summary`
+
+`mockScenario` to HTTP status mapping:
+
+| mockScenario | HTTP |
+|---|---:|
+| NORMAL | 200 |
+| TOKEN_EXPIRED | 401 |
+| SIGNATURE_MISMATCH | 403 |
+| RATE_LIMITED | 429 |
+| DUPLICATE_REQUEST | 409 |
+| SOLD_OUT | 409 |
+| DOWNSTREAM_TIMEOUT | 504 |
+| COURSE_SYSTEM_TIMEOUT | 504 |
+| UPSTREAM_INTERNAL_ERROR | 500 |
+
+### 8080 Gateway Summary
+
+- `GET /api/dev/gateway/scenario-runs/{scenarioRunId}/gateway-summary`
+
+This endpoint reads `gateway_log.extra_info.scenarioRunId` and returns Gateway-side counts for reconciliation.
+
+## Adaptive Passive Alert Monitor v1 API
+
+All endpoints are dev-only and served by `apihub-server` on 8080. They do not call Agent, DashScope, LLM, Stats Aggregator, or Alert Evaluator batch APIs.
+
+### Status
+
+```http
+GET /api/dev/passive-monitor/status
+```
+
+Returns enabled state, runtime status, current config, active/cooldown event counts, bucket key count, last signal time, and last event time.
+
+### Start / Stop
+
+```http
+POST /api/dev/passive-monitor/start
+POST /api/dev/passive-monitor/stop
+```
+
+`stop` prevents new Gateway monitoring signals from being processed. Historical events remain queryable.
+
+### Config
+
+```http
+POST /api/dev/passive-monitor/config
+```
+
+Request body may include:
+
+```json
+{
+  "enabled": true,
+  "bucketSeconds": 5,
+  "shortWindowSeconds": 30,
+  "baselineWindowSeconds": 300,
+  "contextBeforeSeconds": 60,
+  "cooldownSeconds": 120,
+  "minRequestCount": 20,
+  "minErrorCount": 3,
+  "highErrorRateThreshold": 0.10,
+  "highRateLimitThreshold": 0.05,
+  "high5xxRateThreshold": 0.05,
+  "authFailureThreshold": 0.10,
+  "latencyThresholdMs": 1000
+}
+```
+
+### Event Queries
+
+```http
+GET /api/dev/passive-monitor/events/recent?limit=20
+GET /api/dev/passive-monitor/events?range=24h
+GET /api/dev/passive-monitor/events?range=7d
+GET /api/dev/passive-monitor/events?startTime=2026-06-27 10:00:00&endTime=2026-06-27 11:00:00
+GET /api/dev/passive-monitor/events/{monitorEventId}
+```
+
+Supported filters: `apiCode`, `alertType`, `riskLevel`, `eventStatus`, `callerAppCode`, `limit`.
+
+Detail returns the event row, snapshots, and linked `alert_event` when present.
+
+### Close Check
+
+```http
+POST /api/dev/passive-monitor/events/close-check
+```
+
+Runs dev-only lifecycle closure logic. It checks `FIRING` / `COOLDOWN` events and resolves events that have passed the quiet period. It is not a force close endpoint.

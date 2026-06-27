@@ -2,6 +2,8 @@ package com.apihub.agent.dev.gateway;
 
 import com.apihub.agent.common.ErrorCode;
 import com.apihub.agent.common.TraceContext;
+import com.apihub.agent.dev.monitor.GatewayMonitoringSignal;
+import com.apihub.agent.dev.monitor.PassiveMonitorService;
 import com.apihub.agent.exception.BusinessException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -29,6 +33,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class GatewayInvokeService {
 
+    private static final Logger log = LoggerFactory.getLogger(GatewayInvokeService.class);
     private static final int DEFAULT_TIMEOUT_MS = 3000;
     private static final int MAX_TIMEOUT_MS = 10000;
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -38,16 +43,19 @@ public class GatewayInvokeService {
     private final ObjectMapper objectMapper;
     private final GatewayInvokeRouteRegistry routeRegistry;
     private final GatewayInvokeProperties properties;
+    private final PassiveMonitorService passiveMonitorService;
     private final HttpClient httpClient;
 
     public GatewayInvokeService(JdbcTemplate jdbcTemplate,
                                 ObjectMapper objectMapper,
                                 GatewayInvokeRouteRegistry routeRegistry,
-                                GatewayInvokeProperties properties) {
+                                GatewayInvokeProperties properties,
+                                PassiveMonitorService passiveMonitorService) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.routeRegistry = routeRegistry;
         this.properties = properties;
+        this.passiveMonitorService = passiveMonitorService;
         this.httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
@@ -95,6 +103,7 @@ public class GatewayInvokeService {
         long latencyMs = elapsedMs(started);
 
         Long gatewayLogId = insertGatewayLog(api, app, route, request, upstream, mockScenario, traceId, actualRequestId, latencyMs);
+        publishMonitoringSignal(gatewayLogId, api, app, route, request, upstream, mockScenario, traceId, actualRequestId, latencyMs);
 
         GatewayInvokeResultVO result = new GatewayInvokeResultVO();
         result.setApiCode(apiCode);
@@ -113,10 +122,42 @@ public class GatewayInvokeService {
         return result;
     }
 
+    private void publishMonitoringSignal(Long gatewayLogId, Map<String, Object> api, Map<String, Object> app,
+                                         GatewayInvokeRoute route, GatewayInvokeRequest request,
+                                         UpstreamResponse upstream, String mockScenario, String traceId,
+                                         String requestId, long latencyMs) {
+        try {
+            Map<String, Object> extraInfo = buildExtraInfo(request, upstream, mockScenario, requestId);
+            GatewayInvokeRequest.ScenarioContext context = request.getScenarioContext();
+            GatewayMonitoringSignal signal = new GatewayMonitoringSignal();
+            signal.setGatewayLogId(gatewayLogId);
+            signal.setTraceId(traceId);
+            signal.setRequestId(requestId);
+            signal.setScenarioRunId(context == null ? null : context.getScenarioRunId());
+            signal.setPhaseCode(context == null ? null : context.getPhase());
+            signal.setApiId(numberValue(api.get("id")));
+            signal.setApiCode(route.apiCode());
+            signal.setAppId(numberValue(app.get("id")));
+            signal.setCallerAppCode(stringValue(app.get("app_code")));
+            signal.setMockScenario(mockScenario);
+            signal.setHttpStatus(upstream.statusCode());
+            signal.setBusinessCode(upstream.bodyCode());
+            signal.setErrorCode(upstream.statusCode() >= 200 && upstream.statusCode() < 300 ? null : resolveErrorCode(mockScenario, upstream));
+            signal.setLatencyMs(latencyMs);
+            signal.setFailureSource(stringValue(extraInfo.get("failureSource")));
+            signal.setRequestTime(LocalDateTime.now());
+            signal.setExtraInfo(extraInfo);
+            passiveMonitorService.onGatewaySignal(signal);
+        } catch (Exception e) {
+            log.warn("passive monitor signal ignored gatewayLogId={} traceId={} reason={}",
+                    gatewayLogId, traceId, e.getMessage());
+        }
+    }
+
     private UpstreamResponse callMockProvider(GatewayInvokeRoute route, GatewayInvokeRequest request,
                                               String mockScenario, String traceId, String requestId, int timeoutMs) {
         try {
-            String url = buildUrl(route, request, mockScenario);
+            String url = properties.getBaseUrl().replaceAll("/+$", "") + "/api/mock-campus/invoke";
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofMillis(timeoutMs))
@@ -125,14 +166,9 @@ public class GatewayInvokeService {
                     .header("X-Request-Id", requestId)
                     .header("X-Mock-Scenario", mockScenario);
 
-            if ("POST".equals(route.method())) {
-                Map<String, Object> body = new LinkedHashMap<>(safeMap(request.getBody()));
-                body.putIfAbsent("mockScenario", mockScenario);
-                builder.header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(toJson(body)));
-            } else {
-                builder.GET();
-            }
+            Map<String, Object> body = buildMockCampusBody(route, request, mockScenario, traceId, requestId);
+            builder.header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(toJson(body)));
 
             HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
             Map<String, Object> responseBody = parseJsonMap(response.body());
@@ -146,6 +182,26 @@ public class GatewayInvokeService {
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "mock-provider call failed: " + e.getMessage());
         }
+    }
+
+    private Map<String, Object> buildMockCampusBody(GatewayInvokeRoute route, GatewayInvokeRequest request,
+                                                    String mockScenario, String traceId, String requestId) {
+        GatewayInvokeRequest.ScenarioContext context = request.getScenarioContext();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("queryParams", safeMap(request.getQueryParams()));
+        payload.put("body", safeMap(request.getBody()));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("scenarioRunId", context == null ? null : context.getScenarioRunId());
+        body.put("requestId", requestId);
+        body.put("traceId", traceId);
+        body.put("profileCode", context == null ? null : context.getScenarioId());
+        body.put("mode", context == null ? null : context.getScenarioKey());
+        body.put("phaseCode", context == null ? null : context.getPhase());
+        body.put("apiCode", route.apiCode());
+        body.put("callerAppCode", request.getAppCode());
+        body.put("mockScenario", mockScenario);
+        body.put("payload", payload);
+        return body;
     }
 
     private String buildUrl(GatewayInvokeRoute route, GatewayInvokeRequest request, String mockScenario) {
@@ -222,7 +278,8 @@ public class GatewayInvokeService {
         extra.put("upstreamCode", upstream.bodyCode());
         extra.put("upstreamMessage", upstream.bodyMessage());
         extra.put("upstreamDataSummary", summarize(upstream.bodyData()));
-        extra.put("targetProvider", "apihub-mock-provider");
+        extra.put("failureSource", upstream.statusCode() >= 200 && upstream.statusCode() < 300 ? "NONE" : "UPSTREAM");
+        extra.put("targetProvider", "apihub-mock-campus-api");
         extra.put("clientUserAgent", request.getClientInfo() == null ? null : request.getClientInfo().getUserAgent());
         extra.put("queryParams", maskMap(request.getQueryParams()));
         extra.put("requestBodySummary", summarize(maskMap(request.getBody())));

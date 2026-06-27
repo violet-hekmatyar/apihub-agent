@@ -20,6 +20,7 @@
 | `10_EXCEPTION_SOURCE_AUDIT.md` | 异常来源审计，可控触发与直接伪造边界 | 当前主线文档 | 展示异常可信度、解释 409/429/告警来源前阅读 |
 | `11_LLM_AGENT_READINESS.md` | 接入 LLM 前的确定性基线、正常/异常对照、Tool/Evidence 收口 | 当前主线文档 | 进入 LLM Prompt 设计前阅读 |
 | `12_LLM_PROMPT_CONTRACT.md` | LLM Prompt 输入输出、JSON Schema、证据约束和评测规则 | 当前主线文档；阶段 1 产物 | 开发 PromptBuilder / Parser / DashScope 前阅读 |
+| `15_ADAPTIVE_PASSIVE_ALERT_MONITOR.md` | 被动监控、滑动窗口、事件生命周期、monitor_event / alert_snapshot 设计 | 当前主线文档；不调用 Agent / LLM | 实现或验证实时被动告警前阅读 |
 | `docs/apifox/README.md` | Apifox 测试报告资产说明 | 当前验收资产说明 | 查看自动化测试报告前阅读 |
 | `docs/archive/v1/` | 历史文档归档说明 | 历史追溯资料 | 不建议新同学优先阅读 |
 
@@ -246,3 +247,16 @@ RAG / Milvus
 frontend workbench
 Function Calling / ReAct / Multi-Agent
 ```
+## Mock Scenario Runner v1 Updates
+
+- `docs/07_MOCK_PROVIDER_AND_TRAFFIC_SIMULATION.md`: documents the 8090 Scenario Client, 8091 Mock Campus API, 8080 Gateway data plane, profiles, phase design, and reconciliation boundary.
+- `docs/01_DB_SCHEMA.md`: documents `mock_scenario_run`, `mock_scenario_client_request_log`, and `mock_campus_api_request_log`.
+- `docs/03_API_CONTRACT.md`: documents Scenario Client APIs, Mock Campus APIs, and Gateway scenario summary.
+- `docs/09_VALIDATION_AND_SMOKE_GUIDE.md`: documents `scripts/check-mock-scenario-runner-smoke.ps1` and the default / optional smoke flow.
+
+## Adaptive Passive Alert Monitor v1 Updates
+
+- `docs/15_ADAPTIVE_PASSIVE_ALERT_MONITOR.md`: documents Gateway monitoring signal, in-memory sliding windows, lifecycle states, dedup/cooldown/close-check, MQ reserve boundary, and LLM-free monitor scope.
+- `docs/01_DB_SCHEMA.md`: documents `passive_monitor_event` and `passive_alert_snapshot`.
+- `docs/03_API_CONTRACT.md`: documents `/api/dev/passive-monitor/*` APIs.
+- `docs/09_VALIDATION_AND_SMOKE_GUIDE.md`: documents `scripts/check-adaptive-passive-alert-monitor-smoke.ps1`.

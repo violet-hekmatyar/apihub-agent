@@ -12,10 +12,15 @@ DROP TABLE IF EXISTS agent_report;
 DROP TABLE IF EXISTS tool_call_trace;
 DROP TABLE IF EXISTS agent_message;
 DROP TABLE IF EXISTS agent_session;
+DROP TABLE IF EXISTS mock_campus_api_request_log;
+DROP TABLE IF EXISTS mock_scenario_client_request_log;
+DROP TABLE IF EXISTS mock_scenario_run;
 DROP TABLE IF EXISTS rag_chunk_meta;
 DROP TABLE IF EXISTS rag_document;
 DROP TABLE IF EXISTS event_api_relation;
 DROP TABLE IF EXISTS campus_event;
+DROP TABLE IF EXISTS passive_alert_snapshot;
+DROP TABLE IF EXISTS passive_monitor_event;
 DROP TABLE IF EXISTS scenario_call_sample;
 DROP TABLE IF EXISTS scenario_run;
 DROP TABLE IF EXISTS alert_event;
@@ -259,6 +264,82 @@ CREATE TABLE scenario_call_sample (
   CONSTRAINT fk_scenario_call_sample_gateway_log FOREIGN KEY (gateway_log_id) REFERENCES gateway_log (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Small sampled calls for Scenario Runner runs';
 
+CREATE TABLE mock_scenario_run (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Mock scenario run ID',
+  scenario_run_id VARCHAR(96) NOT NULL COMMENT 'External run ID',
+  profile_code VARCHAR(64) NOT NULL COMMENT 'Scenario profile code',
+  mode VARCHAR(32) NOT NULL COMMENT 'FAST_DEMO / NORMAL_DEMO',
+  status VARCHAR(32) NOT NULL COMMENT 'RUNNING / COMPLETED / FAILED / STOPPED',
+  target_gateway_base_url VARCHAR(255) NOT NULL COMMENT 'Target API-HUB Gateway base URL',
+  duration_seconds INT NOT NULL COMMENT 'Scenario duration seconds',
+  random_seed BIGINT NULL DEFAULT NULL COMMENT 'Random seed',
+  rps_scale DECIMAL(10,2) NOT NULL DEFAULT 1.00 COMMENT 'RPS scale factor',
+  start_time DATETIME NULL DEFAULT NULL COMMENT 'Start time',
+  end_time DATETIME NULL DEFAULT NULL COMMENT 'End time',
+  total_request_count INT NOT NULL DEFAULT 0 COMMENT 'Total sender requests',
+  success_count INT NOT NULL DEFAULT 0 COMMENT 'Sender success count',
+  fail_count INT NOT NULL DEFAULT 0 COMMENT 'Sender fail count',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_scenario_run_id (scenario_run_id),
+  KEY idx_profile_mode (profile_code, mode),
+  KEY idx_status (status),
+  KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Mock Scenario Client run state';
+
+CREATE TABLE mock_scenario_client_request_log (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Mock sender request log ID',
+  scenario_run_id VARCHAR(96) NOT NULL COMMENT 'External run ID',
+  request_id VARCHAR(96) NOT NULL COMMENT 'Sender request ID',
+  trace_id VARCHAR(96) NULL DEFAULT NULL COMMENT 'Gateway trace ID',
+  profile_code VARCHAR(64) NOT NULL COMMENT 'Scenario profile code',
+  mode VARCHAR(32) NOT NULL COMMENT 'FAST_DEMO / NORMAL_DEMO',
+  phase_code VARCHAR(64) NOT NULL COMMENT 'Scenario phase code',
+  api_code VARCHAR(64) NOT NULL COMMENT 'Target API code',
+  caller_app_code VARCHAR(64) NOT NULL COMMENT 'Caller app code',
+  mock_scenario VARCHAR(64) NOT NULL COMMENT 'Mock scenario',
+  target_gateway_url VARCHAR(255) NOT NULL COMMENT 'Gateway invoke URL',
+  send_time DATETIME NOT NULL COMMENT 'Send time',
+  gateway_response_status INT NULL DEFAULT NULL COMMENT 'Gateway HTTP status',
+  gateway_response_code VARCHAR(64) NULL DEFAULT NULL COMMENT 'Gateway/upstream business code',
+  gateway_latency_ms INT NULL DEFAULT NULL COMMENT 'Gateway latency milliseconds',
+  success TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Whether sender received success',
+  error_message VARCHAR(512) NULL DEFAULT NULL COMMENT 'Sender-side error message',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  PRIMARY KEY (id),
+  KEY idx_scenario_run_id (scenario_run_id),
+  KEY idx_request_id (request_id),
+  KEY idx_phase_api (scenario_run_id, phase_code, api_code),
+  KEY idx_mock_scenario (scenario_run_id, mock_scenario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Mock Scenario Client per-request log';
+
+CREATE TABLE mock_campus_api_request_log (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Mock upstream request log ID',
+  scenario_run_id VARCHAR(96) NOT NULL COMMENT 'External run ID',
+  request_id VARCHAR(96) NOT NULL COMMENT 'Request ID',
+  trace_id VARCHAR(96) NULL DEFAULT NULL COMMENT 'Trace ID',
+  phase_code VARCHAR(64) NOT NULL COMMENT 'Scenario phase code',
+  api_code VARCHAR(64) NOT NULL COMMENT 'API code',
+  mock_scenario VARCHAR(64) NOT NULL COMMENT 'Mock scenario',
+  receive_time DATETIME NOT NULL COMMENT 'Receive time',
+  response_status INT NOT NULL COMMENT 'Returned HTTP status',
+  business_code VARCHAR(64) NULL DEFAULT NULL COMMENT 'Business response code',
+  latency_ms INT NULL DEFAULT NULL COMMENT 'Mock latency milliseconds',
+  response_type VARCHAR(64) NOT NULL COMMENT 'NORMAL / AUTH / RATE_LIMIT / TIMEOUT / SERVER_ERROR',
+  failure_source VARCHAR(32) NOT NULL DEFAULT 'NONE' COMMENT 'NONE / GATEWAY / UPSTREAM / CALLER',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  PRIMARY KEY (id),
+  KEY idx_scenario_run_id (scenario_run_id),
+  KEY idx_request_id (request_id),
+  KEY idx_phase_api (scenario_run_id, phase_code, api_code),
+  KEY idx_response_status (scenario_run_id, response_status),
+  KEY idx_failure_source (scenario_run_id, failure_source)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Mock Campus API upstream request log';
+
 CREATE TABLE alert_event (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Alert event ID',
   event_code VARCHAR(64) NOT NULL COMMENT 'Event code',
@@ -283,6 +364,76 @@ CREATE TABLE alert_event (
   KEY idx_status (status),
   CONSTRAINT fk_alert_event_api FOREIGN KEY (api_id) REFERENCES api_endpoint (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Structured alert events';
+
+CREATE TABLE passive_monitor_event (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Passive monitor event ID',
+  monitor_event_id VARCHAR(96) NOT NULL COMMENT 'External monitor event ID',
+  alert_event_id BIGINT NULL DEFAULT NULL COMMENT 'Related alert_event ID',
+  alert_type VARCHAR(64) NOT NULL COMMENT 'Alert type',
+  risk_level VARCHAR(32) NOT NULL COMMENT 'WARNING / CRITICAL',
+  event_status VARCHAR(32) NOT NULL COMMENT 'FIRING / COOLDOWN / RESOLVED',
+  api_code VARCHAR(64) NOT NULL COMMENT 'API code',
+  caller_app_code VARCHAR(64) NULL DEFAULT NULL COMMENT 'Caller app code',
+  dedup_key VARCHAR(192) NOT NULL COMMENT 'Dedup key',
+  first_trigger_time DATETIME NOT NULL COMMENT 'First trigger time',
+  last_trigger_time DATETIME NOT NULL COMMENT 'Last trigger time',
+  resolved_time DATETIME NULL DEFAULT NULL COMMENT 'Resolved time',
+  window_start_time DATETIME NOT NULL COMMENT 'Trigger window start',
+  window_end_time DATETIME NOT NULL COMMENT 'Trigger window end',
+  context_start_time DATETIME NULL DEFAULT NULL COMMENT 'Context window start',
+  context_end_time DATETIME NULL DEFAULT NULL COMMENT 'Context window end',
+  request_count INT NOT NULL DEFAULT 0 COMMENT 'Request count',
+  error_count INT NOT NULL DEFAULT 0 COMMENT 'Error count',
+  error_rate DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT 'Error rate',
+  rate_limit_count INT NOT NULL DEFAULT 0 COMMENT 'Rate limit count',
+  rate_limit_rate DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT 'Rate limit rate',
+  auth_failure_count INT NOT NULL DEFAULT 0 COMMENT 'Auth failure count',
+  auth_failure_rate DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT 'Auth failure rate',
+  timeout_count INT NOT NULL DEFAULT 0 COMMENT 'Timeout count',
+  timeout_rate DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT 'Timeout rate',
+  p95_latency_ms INT NULL DEFAULT NULL COMMENT 'P95 latency',
+  baseline_request_count INT NOT NULL DEFAULT 0 COMMENT 'Baseline request count',
+  baseline_error_rate DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT 'Baseline error rate',
+  duration_seconds INT NULL DEFAULT NULL COMMENT 'Event duration seconds',
+  cooldown_until DATETIME NULL DEFAULT NULL COMMENT 'Cooldown until',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Updated time',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_monitor_event_id (monitor_event_id),
+  KEY idx_dedup_status (dedup_key, event_status),
+  KEY idx_api_time (api_code, first_trigger_time),
+  KEY idx_status_time (event_status, first_trigger_time),
+  KEY idx_alert_type_time (alert_type, first_trigger_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Adaptive passive monitor event lifecycle';
+
+CREATE TABLE passive_alert_snapshot (
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Passive alert snapshot ID',
+  snapshot_id VARCHAR(96) NOT NULL COMMENT 'External snapshot ID',
+  monitor_event_id VARCHAR(96) NOT NULL COMMENT 'External monitor event ID',
+  snapshot_time DATETIME NOT NULL COMMENT 'Snapshot time',
+  snapshot_type VARCHAR(32) NOT NULL COMMENT 'TRIGGER_WINDOW / CONTEXT_BEFORE / RECOVERY_WINDOW / CLOSE_SUMMARY',
+  api_code VARCHAR(64) NOT NULL COMMENT 'API code',
+  caller_app_code VARCHAR(64) NULL DEFAULT NULL COMMENT 'Caller app code',
+  window_start_time DATETIME NOT NULL COMMENT 'Window start',
+  window_end_time DATETIME NOT NULL COMMENT 'Window end',
+  request_count INT NOT NULL DEFAULT 0 COMMENT 'Request count',
+  success_count INT NOT NULL DEFAULT 0 COMMENT 'Success count',
+  error_count INT NOT NULL DEFAULT 0 COMMENT 'Error count',
+  error_rate DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT 'Error rate',
+  status_code_distribution_json JSON NULL COMMENT 'Status code distribution',
+  business_code_distribution_json JSON NULL COMMENT 'Business code distribution',
+  caller_app_distribution_json JSON NULL COMMENT 'Caller app distribution',
+  sample_request_ids_json JSON NULL COMMENT 'Sample request IDs',
+  threshold_snapshot_json JSON NULL COMMENT 'Threshold snapshot',
+  extra_json JSON NULL COMMENT 'Extension info',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Created time',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_snapshot_id (snapshot_id),
+  KEY idx_monitor_event_id (monitor_event_id),
+  KEY idx_snapshot_type (snapshot_type),
+  KEY idx_snapshot_time (snapshot_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Adaptive passive alert metric snapshots';
 
 CREATE TABLE campus_event (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Campus event ID',
