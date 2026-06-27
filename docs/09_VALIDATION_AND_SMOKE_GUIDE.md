@@ -769,3 +769,51 @@ powershell -ExecutionPolicy Bypass -File .\scripts\check-adaptive-passive-alert-
 ```
 
 `close-check` only evaluates the quiet-period rule. It does not force events closed. Production can later run the same logic from a scheduler or async worker.
+
+---
+
+### Monitor Report Workbench v1 smoke
+
+Default smoke does not call DashScope. It checks health, Workbench API, report detail, and HTML rendering:
+
+```powershell
+cd D:\apihub-agent-dev
+powershell -ExecutionPolicy Bypass -File .\scripts\check-monitor-report-workbench-smoke.ps1 `
+  -BaseUrl http://127.0.0.1:8080
+```
+
+Behavior:
+
+- If a recent passive monitor event exists, calls `POST /api/dev/report-workbench/from-monitor-event` with `includeLlm=false`.
+- If no event exists, calls `POST /api/dev/report-workbench/analyze-range` with `range=24h` and `includeNormalSummary=true`.
+- Verifies `GET /api/dev/report-workbench/reports/{reportId}`.
+- Verifies `GET /api/dev/report-workbench/reports/{reportId}/html`.
+
+Optional LLM validation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-monitor-report-workbench-smoke.ps1 -IncludeLlm
+```
+
+Optional PDF export:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-monitor-report-workbench-smoke.ps1 `
+  -ExportPdf `
+  -OutputPath D:\tmp\apihub-monitor-report-smoke.pdf
+```
+
+Direct PDF export:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\export-monitor-report-pdf.ps1 `
+  -ReportHtmlUrl http://127.0.0.1:8080/api/dev/report-workbench/reports/16051/html `
+  -OutputPath D:\tmp\apihub-monitor-report-16051.pdf
+```
+
+Acceptance:
+
+- `reportId`, `reportType`, `htmlUrl`, `llmStatus`, and `displayStatus` are printed.
+- Default `llmStatus` is `SKIPPED`.
+- HTML contains fixed report modules including `证据明细`.
+- PDF script prints `pdfPath=...` when `-ExportPdf` is used and Edge/Chrome exists.

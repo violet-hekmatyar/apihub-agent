@@ -1555,3 +1555,79 @@ POST /api/dev/passive-monitor/events/close-check
 ```
 
 Runs dev-only lifecycle closure logic. It checks `FIRING` / `COOLDOWN` events and resolves events that have passed the quiet period. It is not a force close endpoint.
+
+---
+
+## Monitor Report Workbench v1 API
+
+Workbench API is dev-only and runs on the `apihub-server` service.
+
+```http
+POST /api/dev/report-workbench/from-monitor-event
+POST /api/dev/report-workbench/analyze-latest-anomaly
+POST /api/dev/report-workbench/analyze-range
+GET  /api/dev/report-workbench/reports/recent
+GET  /api/dev/report-workbench/reports/{reportId}
+GET  /api/dev/report-workbench/reports/{reportId}/html
+```
+
+### POST /api/dev/report-workbench/from-monitor-event
+
+Request:
+
+```json
+{
+  "monitorEventId": "pm_xxx",
+  "includeLlm": false,
+  "includePrompt": false,
+  "forceRebuild": true
+}
+```
+
+Behavior:
+
+- Reads `passive_monitor_event`, `passive_alert_snapshot`, and linked `alert_event`.
+- Derives `apiCode`, `callerAppCode`, `startTime`, `endTime`, and `alertId`.
+- Reuses deterministic Agent Diagnosis.
+- Builds `analysisContextJson` and `htmlRenderableJson`.
+- Persists Workbench metadata in `agent_report.extra_info`.
+- If `includeLlm=true`, DashScope is attempted; LLM failures return deterministic report with `llmStatus=FALLBACK`.
+
+Response data includes `reportId`, `reportType`, `htmlUrl`, `llmStatus`, `displayStatus`, `colorLevel`, `analysisContextJson`, and `htmlRenderableJson`.
+
+### POST /api/dev/report-workbench/analyze-latest-anomaly
+
+Finds the latest `passive_monitor_event` with status `FIRING`, `COOLDOWN`, or `RESOLVED`, preferring `WARNING`. If none exists, returns `status=NO_ANOMALY` and suggests `analyze-range`.
+
+### POST /api/dev/report-workbench/analyze-range
+
+Request:
+
+```json
+{
+  "range": "24h",
+  "apiCode": "LECTURE_REGISTER",
+  "includeLlm": false,
+  "includePrompt": false,
+  "includeNormalSummary": true
+}
+```
+
+`range` supports `1h`, `24h`, `7d`, or custom `startTime` / `endTime`.
+
+Behavior:
+
+- Aggregates `gateway_log`, `passive_monitor_event`, and `alert_event`.
+- Generates `PERIODIC_HEALTH_SUMMARY`.
+- Generates a normal health report when no anomaly exists and `includeNormalSummary=true`.
+- Does not fabricate anomaly facts.
+
+### HTML and PDF
+
+`GET /api/dev/report-workbench/reports/{reportId}/html` renders the Workbench JSON as the authoritative HTML view. The backend does not generate PDF directly. Use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\export-monitor-report-pdf.ps1 `
+  -ReportHtmlUrl http://127.0.0.1:8080/api/dev/report-workbench/reports/16051/html `
+  -OutputPath D:\tmp\apihub-monitor-report-16051.pdf
+```

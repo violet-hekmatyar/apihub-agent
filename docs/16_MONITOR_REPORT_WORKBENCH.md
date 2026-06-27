@@ -193,6 +193,46 @@ v1 不做：
 
 ## 11. 后续实现计划
 
+## 12. Implementation Notes
+
+Current implementation package:
+
+```text
+com.apihub.agent.dev.reportworkbench
+```
+
+Key classes:
+
+- `MonitorReportWorkbenchController`
+- `MonitorReportWorkbenchService`
+- `ReportWorkbenchHtmlRenderer`
+- `MonitorReportWorkbenchDtos`
+
+Persistence:
+
+- No new database table is introduced.
+- Workbench metadata is stored in `agent_report.extra_info`.
+- Stored metadata includes `source=MonitorReportWorkbenchV1`, `reportType`, `sourceType`, `monitorEventId` or range fields, `llmStatus`, `llmModel`, `analysisContextJson`, `htmlRenderableJson`, `validationWarnings`, and `dataBoundaryNote`.
+
+LLM behavior:
+
+- LLM is never triggered by passive real-time monitoring.
+- Workbench only calls DashScope when API request has `includeLlm=true`.
+- If DashScope is unavailable or validation fails, the API still returns deterministic report data with `llmStatus=FALLBACK`.
+- Default smoke keeps `includeLlm=false` and returns `llmStatus=SKIPPED`.
+
+HTML behavior:
+
+- The Workbench HTML endpoint renders `htmlRenderableJson` as the authoritative view.
+- Fixed modules are rendered in the order defined by `17_LLM_REPORT_PROMPT_CONTRACT.md`.
+- Tables and long cells use `overflow-wrap:anywhere`, `word-break:break-word`, and a horizontal table wrapper to avoid response summaries overflowing the page.
+- The report uses only green, blue, yellow, and gray display levels.
+
+PDF behavior:
+
+- Backend does not generate PDF directly.
+- PDF is exported from the HTML endpoint using `scripts/export-monitor-report-pdf.ps1`.
+
 建议顺序：
 
 1. `MonitorReportWorkbenchController`
@@ -204,4 +244,3 @@ v1 不做：
 7. `scripts/check-monitor-report-workbench-smoke.ps1`
 8. `scripts/export-monitor-report-pdf.ps1`
 9. `docs/09_VALIDATION_AND_SMOKE_GUIDE.md` 增加验收说明
-

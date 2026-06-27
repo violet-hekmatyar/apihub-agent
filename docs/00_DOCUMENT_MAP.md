@@ -21,6 +21,8 @@
 | `11_LLM_AGENT_READINESS.md` | 接入 LLM 前的确定性基线、正常/异常对照、Tool/Evidence 收口 | 当前主线文档 | 进入 LLM Prompt 设计前阅读 |
 | `12_LLM_PROMPT_CONTRACT.md` | LLM Prompt 输入输出、JSON Schema、证据约束和评测规则 | 当前主线文档；阶段 1 产物 | 开发 PromptBuilder / Parser / DashScope 前阅读 |
 | `15_ADAPTIVE_PASSIVE_ALERT_MONITOR.md` | 被动监控、滑动窗口、事件生命周期、monitor_event / alert_snapshot 设计 | 当前主线文档；不调用 Agent / LLM | 实现或验证实时被动告警前阅读 |
+| `16_MONITOR_REPORT_WORKBENCH.md` | Monitor Report Workbench 主动分析、HTML、PDF 导出边界 | 当前主线文档 | 实现或验收 Workbench API 前阅读 |
+| `17_LLM_REPORT_PROMPT_CONTRACT.md` | Workbench 报告 JSON、状态、颜色、HTML 模块和证据绑定契约 | 当前主线文档 | 调整 Workbench JSON/HTML/LLM 输出前阅读 |
 | `docs/apifox/README.md` | Apifox 测试报告资产说明 | 当前验收资产说明 | 查看自动化测试报告前阅读 |
 | `docs/archive/v1/` | 历史文档归档说明 | 历史追溯资料 | 不建议新同学优先阅读 |
 

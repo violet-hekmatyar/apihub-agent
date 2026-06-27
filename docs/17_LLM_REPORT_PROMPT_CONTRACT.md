@@ -475,9 +475,37 @@ RAG 后续只增强建议操作和知识依据，不改变已落库事实。
 
 RAG 不得让 LLM 覆盖：
 
+## 20. Implementation Status
+
+Monitor Report Workbench v1 currently builds and validates the Workbench-facing JSON shape in backend deterministic code.
+
+Guaranteed fields in `htmlRenderableJson`:
+
+- `reportType`
+- `reportHeader`
+- `displayStatus`
+- `analysisScope`
+- `metricCheckup`
+- `monitorRuleAssessments`
+- `businessCodeDistribution`
+- `eventTimeline`
+- `diagnosisSummary`
+- `operationRecommendations`
+- `evidenceList`
+- `dataBoundaryNote`
+
+Validator coverage:
+
+- Ensures the required top-level fields are present.
+- Normalizes `CRITICAL` to `WARNING` for display.
+- Restricts display status to `NORMAL`, `WATCH`, `WARNING`, `UNKNOWN`.
+- Restricts color level to `GREEN`, `BLUE`, `YELLOW`, `GRAY`.
+- Records validation warnings in `agent_report.extra_info.validationWarnings`.
+
+Current LLM integration reuses the existing DashScope diagnosis orchestrator. If DashScope is unavailable or validation fails, Workbench keeps deterministic `htmlRenderableJson` and returns `llmStatus=FALLBACK`.
+
 - gateway_log 事实。
 - passive monitor 事件。
 - alert_event 事实。
 - deterministic risk / display status。
 - evidenceIds 引用关系。
-
