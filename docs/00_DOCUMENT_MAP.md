@@ -260,3 +260,11 @@ Function Calling / ReAct / Multi-Agent
 - `docs/01_DB_SCHEMA.md`: documents `passive_monitor_event` and `passive_alert_snapshot`.
 - `docs/03_API_CONTRACT.md`: documents `/api/dev/passive-monitor/*` APIs.
 - `docs/09_VALIDATION_AND_SMOKE_GUIDE.md`: documents `scripts/check-adaptive-passive-alert-monitor-smoke.ps1`.
+
+## Monitor Report Workbench v1 Updates
+
+- `docs/16_MONITOR_REPORT_WORKBENCH.md`: documents the active Monitor Report Workbench product boundary, report types, monitorEventId / range trigger flows, API plan, HTML section structure, and PDF export principle.
+- `docs/17_LLM_REPORT_PROMPT_CONTRACT.md`: documents the Workbench-facing LLM report context, prompt templates, output JSON schema, fixed status / business-code / monitor-rule mappings, color rules, evidence binding, and validation rules.
+- `docs/08_AGENT_DIAGNOSIS_AND_EVAL_FLOW.md` remains responsible for deterministic Agent diagnosis and the current report HTML baseline.
+- `docs/12_LLM_PROMPT_CONTRACT.md` remains responsible for the existing LLM Diagnosis PromptBuilder / Parser / Validator / DashScope contract.
+- `docs/15_ADAPTIVE_PASSIVE_ALERT_MONITOR.md` remains responsible for Passive Monitor internals and realtime monitor boundaries.
